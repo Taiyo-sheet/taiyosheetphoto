@@ -335,8 +335,14 @@ body{font-family:'Noto Sans JP','メイリオ',Meiryo,'Hiragino Kaku Gothic ProN
 .ie-proc-head{display:flex;gap:8px;margin-bottom:12px}
 .ie-proc-title{flex:1;min-width:0;border:1px solid #cbd5e6;border-radius:8px;padding:10px;font-size:14px;font-weight:700;font-family:inherit}
 .ie-delproc{background:#fff;border:1px solid #e0a5a5;color:#c44;border-radius:8px;padding:0 10px;font-size:11px;font-weight:800;font-family:inherit;flex-shrink:0}
-.ie-row{display:flex;gap:6px;align-items:center;margin-bottom:7px}
+.ie-row{display:flex;gap:6px;align-items:center;margin-bottom:7px;position:relative}
 .ie-item-input{flex:1;min-width:0;border:1px solid #dde4ee;border-radius:8px;padding:10px;font-size:13px;font-family:inherit}
+/* 項目編集：変更したところを分かりやすく光らせる */
+@keyframes ie-flash-anim{0%{background:#fff0d6}70%{background:#fff0d6}100%{background:#fff}}
+.ie-row.ie-flash .ie-item-input{border-color:#F4A33A;animation:ie-flash-anim 1.8s ease-out}
+.ie-row.ie-flash .ie-mv,.ie-row.ie-flash .ie-del{border-color:#F4A33A}
+.ie-chip{position:absolute;top:-9px;left:10px;background:#F4A33A;color:#0A1A38;font-size:10px;font-weight:800;padding:1px 8px;border-radius:9px;pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,.25);z-index:3;white-space:nowrap}
+.ie-proc-title.ie-flash{border-color:#F4A33A!important;animation:ie-flash-anim 1.8s ease-out}
 .ie-mv{width:34px;height:40px;border:1px solid #dde4ee;background:#fff;border-radius:8px;font-size:11px;flex-shrink:0}
 .ie-del{width:40px;height:40px;border:1px solid #f0c0c0;background:#fff;border-radius:8px;font-size:15px;flex-shrink:0}
 .ie-additem{width:100%;height:46px;border:1.5px dashed #9fb0c8;background:#fff;color:#0C204A;border-radius:10px;font-size:13px;font-weight:800;font-family:inherit;margin-top:8px;margin-bottom:20px}
@@ -4594,14 +4600,24 @@ function electricTemplate(){
   procs.forEach(function(p,i){p.no='工程'+_circled(i+1);});
   return procs;
 }
+var _ieFlash=null; // {proc,idx,label} 再描画後に光らせる対象
+function ieFlashRow(i,label){
+  var rows=document.querySelectorAll('#ie-body .ie-row');
+  var row=rows[i];if(!row)return;
+  row.classList.add('ie-flash');
+  var old=row.querySelector('.ie-chip');if(old)old.remove();
+  var c=document.createElement('span');c.className='ie-chip';c.textContent=label||'✓ 変更';row.appendChild(c);
+  try{row.scrollIntoView({block:'center',behavior:'smooth'});}catch(e){}
+  clearTimeout(row._ieT);row._ieT=setTimeout(function(){row.classList.remove('ie-flash');var cc=row.querySelector('.ie-chip');if(cc)cc.remove();},1900);
+}
 function openItemEdit(){ieProc=Math.max(0,Math.min(currentProc||0,PROCESSES.length-1));document.getElementById('item-edit-overlay').classList.add('on');document.body.style.overflow='hidden';renderItemEdit();}
 function closeItemEdit(){document.getElementById('item-edit-overlay').classList.remove('on');document.body.style.overflow='';renderMpBar();render();}
 function ieGoProc(i){ieProc=i;renderItemEdit();}
-function ieRenameItem(i,val){ensureEditableProcesses();val=(val||'').trim();PROCESSES[ieProc].items[i]=val;saveProcesses();var p=ieProc;idbRewritePhotos(function(v){if(v.procIndex===p&&v.itemIndex===i)v.itemName=val;return false;});}
-function ieRenameProc(val){ensureEditableProcesses();val=(val||'').trim();PROCESSES[ieProc].title=val;saveProcesses();var p=ieProc;idbRewritePhotos(function(v){if(v.procIndex===p)v.procTitle=val;return false;});}
-function ieAddItem(){var n=prompt('追加する項目名');if(n===null)return;n=n.trim();if(!n)return;ensureEditableProcesses();var p=PROCESSES[ieProc];p.items.push(n);p.stars.push(false);if(p.dims)p.dims.push(false);measurementPoints.forEach(function(mp){mp.state[ieProc].push({checked:false,date:null,photos:[],dim:'',customName:null});});saveProcesses();saveLS();renderItemEdit();render();}
-function ieDeleteItem(i){var p=ieProc;if(PROCESSES[p].items.length<=1){showToast('項目は1つ以上必要です');return;}if(!confirm('「'+getItemName(p,i)+'」を削除しますか？\nこの項目の写真も削除されます。'))return;ensureEditableProcesses();PROCESSES[p].items.splice(i,1);PROCESSES[p].stars.splice(i,1);if(PROCESSES[p].dims)PROCESSES[p].dims.splice(i,1);if(PROCESSES[p].customIdx!=null&&PROCESSES[p].customIdx>=i)PROCESSES[p].customIdx=(PROCESSES[p].customIdx===i?null:PROCESSES[p].customIdx-1);measurementPoints.forEach(function(mp){mp.state[p].splice(i,1);});saveProcesses();saveLS();idbRewritePhotos(function(v){if(v.procIndex!==p)return false;if(v.itemIndex===i)return true;if(v.itemIndex>i){v.itemIndex--;v.itemName=PROCESSES[p].items[v.itemIndex]||'';}return false;},function(){reloadPhotos(function(){renderItemEdit();});});}
-function ieMoveItem(i,dir){var p=ieProc,j=i+dir,pr=PROCESSES[p];if(j<0||j>=pr.items.length)return;ensureEditableProcesses();pr=PROCESSES[p];function sw(a){if(!a)return;var t=a[i];a[i]=a[j];a[j]=t;}sw(pr.items);sw(pr.stars);sw(pr.dims);measurementPoints.forEach(function(mp){sw(mp.state[p]);});saveProcesses();saveLS();idbRewritePhotos(function(v){if(v.procIndex!==p)return false;if(v.itemIndex===i){v.itemIndex=j;v.itemName=pr.items[j]||'';}else if(v.itemIndex===j){v.itemIndex=i;v.itemName=pr.items[i]||'';}return false;},function(){reloadPhotos(function(){renderItemEdit();});});}
+function ieRenameItem(i,val){ensureEditableProcesses();val=(val||'').trim();PROCESSES[ieProc].items[i]=val;saveProcesses();var p=ieProc;idbRewritePhotos(function(v){if(v.procIndex===p&&v.itemIndex===i)v.itemName=val;return false;});ieFlashRow(i,'✓ 変更しました');showToast('項目名を変更しました');}
+function ieRenameProc(val){ensureEditableProcesses();val=(val||'').trim();PROCESSES[ieProc].title=val;saveProcesses();var p=ieProc;idbRewritePhotos(function(v){if(v.procIndex===p)v.procTitle=val;return false;});var t=document.querySelector('.ie-proc-title');if(t){t.classList.add('ie-flash');clearTimeout(t._ieT);t._ieT=setTimeout(function(){t.classList.remove('ie-flash');},1900);}showToast('工程名を変更しました');}
+function ieAddItem(){var n=prompt('追加する項目名');if(n===null)return;n=n.trim();if(!n)return;ensureEditableProcesses();var p=PROCESSES[ieProc];p.items.push(n);p.stars.push(false);if(p.dims)p.dims.push(false);measurementPoints.forEach(function(mp){mp.state[ieProc].push({checked:false,date:null,photos:[],dim:'',customName:null});});saveProcesses();saveLS();_ieFlash={proc:ieProc,idx:PROCESSES[ieProc].items.length-1,label:'✓ 追加しました'};renderItemEdit();render();showToast('項目を追加しました');}
+function ieDeleteItem(i){var p=ieProc;if(PROCESSES[p].items.length<=1){showToast('項目は1つ以上必要です');return;}if(!confirm('「'+getItemName(p,i)+'」を削除しますか？\nこの項目の写真も削除されます。'))return;ensureEditableProcesses();PROCESSES[p].items.splice(i,1);PROCESSES[p].stars.splice(i,1);if(PROCESSES[p].dims)PROCESSES[p].dims.splice(i,1);if(PROCESSES[p].customIdx!=null&&PROCESSES[p].customIdx>=i)PROCESSES[p].customIdx=(PROCESSES[p].customIdx===i?null:PROCESSES[p].customIdx-1);measurementPoints.forEach(function(mp){mp.state[p].splice(i,1);});saveProcesses();saveLS();idbRewritePhotos(function(v){if(v.procIndex!==p)return false;if(v.itemIndex===i)return true;if(v.itemIndex>i){v.itemIndex--;v.itemName=PROCESSES[p].items[v.itemIndex]||'';}return false;},function(){reloadPhotos(function(){renderItemEdit();showToast('項目を削除しました');});});}
+function ieMoveItem(i,dir){var p=ieProc,j=i+dir,pr=PROCESSES[p];if(j<0||j>=pr.items.length)return;ensureEditableProcesses();pr=PROCESSES[p];function sw(a){if(!a)return;var t=a[i];a[i]=a[j];a[j]=t;}sw(pr.items);sw(pr.stars);sw(pr.dims);measurementPoints.forEach(function(mp){sw(mp.state[p]);});saveProcesses();saveLS();_ieFlash={proc:p,idx:j,label:(dir<0?'▲ 上へ移動':'▼ 下へ移動')};idbRewritePhotos(function(v){if(v.procIndex!==p)return false;if(v.itemIndex===i){v.itemIndex=j;v.itemName=pr.items[j]||'';}else if(v.itemIndex===j){v.itemIndex=i;v.itemName=pr.items[i]||'';}return false;},function(){reloadPhotos(function(){renderItemEdit();});});}
 function ieAddProc(){var t=prompt('追加する工程(タブ)名');if(t===null)return;t=t.trim();if(!t)return;ensureEditableProcesses();PROCESSES.push({no:'工程'+_circled(PROCESSES.length+1),title:t,category:'',badge:'badge-civil',sub:'',items:['写真1'],stars:[false],footer:''});measurementPoints.forEach(function(mp){mp.state.push([{checked:false,date:null,photos:[],dim:'',customName:null}]);});ieProc=PROCESSES.length-1;saveProcesses();saveLS();renderItemEdit();render();}
 function ieDeleteProc(){if(PROCESSES.length<=1){showToast('工程は1つ以上必要です');return;}var p=ieProc;if(!confirm('工程「'+(PROCESSES[p].title||'')+'」を削除しますか？\nこの工程の写真も削除されます。'))return;ensureEditableProcesses();PROCESSES.splice(p,1);PROCESSES.forEach(function(pp,idx){pp.no='工程'+_circled(idx+1);});measurementPoints.forEach(function(mp){mp.state.splice(p,1);});if(currentProc>=PROCESSES.length)currentProc=PROCESSES.length-1;ieProc=Math.min(p,PROCESSES.length-1);saveProcesses();saveLS();idbRewritePhotos(function(v){if(v.procIndex===p)return true;if(v.procIndex>p){v.procIndex--;if(PROCESSES[v.procIndex]){v.procNo=PROCESSES[v.procIndex].no;v.procTitle=PROCESSES[v.procIndex].title;}}return false;},function(){reloadPhotos(function(){renderItemEdit();});});}
 function ieSaveTemplate(){var n=prompt('テンプレ名を入力');if(n===null)return;n=n.trim();if(!n)return;var t=getTemplates();t.push({name:n,procs:_clone(PROCESSES)});saveTemplates(t);showToast('テンプレ「'+n+'」を保存しました');}
@@ -4674,6 +4690,8 @@ function renderItemEdit(){
   });
   h+='<button class="ie-additem" onclick="ieAddItem()">＋ 項目を追加</button>';
   document.getElementById('ie-body').innerHTML=h;
+  if(_ieFlash&&_ieFlash.proc===ieProc){ieFlashRow(_ieFlash.idx,_ieFlash.label);}
+  _ieFlash=null;
 }
 
 /* 画面が定期的に暗く（自動スリープ）しないよう抑止：対応端末のみ・best-effort */
