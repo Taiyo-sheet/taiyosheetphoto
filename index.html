@@ -227,6 +227,8 @@ body{font-family:'Noto Sans JP','メイリオ',Meiryo,'Hiragino Kaku Gothic ProN
 .gal-zip-btn:active{background:#C99858}
 .gal-bulk-btn{background:#0C204A;border-color:#0C204A}
 .gal-bulk-btn:active{background:#081634}
+.gal-box-btn{background:#0061D5;border-color:#0051B3}
+.gal-box-btn:active{background:#0051B3}
 .gal-zip-btn:disabled{background:#ccc;border-color:#999;color:#666;cursor:wait}
 .gal-item.selected{outline:3px solid #FCC383;outline-offset:-3px;border-radius:6px;position:relative}
 .gal-item.selected::after{content:'';position:absolute;inset:0;background:rgba(252,195,131,.2);pointer-events:none;border-radius:6px}
@@ -680,6 +682,7 @@ input[type=file]{display:none}
     <div style="display:flex;gap:8px;align-items:center">
       <button class="gal-expand-btn" onclick="toggleAllGalProc()" title="全て開閉">⇅</button>
       <button class="gal-zip-btn gal-bulk-btn" onclick="enterSelectMode()">✏️ 看板一括編集</button>
+      <button class="gal-zip-btn gal-box-btn" onclick="sharePhotosToBox()">📤 Boxへ送る</button>
       <button class="gal-zip-btn" onclick="downloadAllPhotosZip()">📥 一括保存</button>
       <button class="gal-top-close" onclick="closeGallery()">✕</button>
     </div>
@@ -2764,6 +2767,53 @@ function downloadAllPhotosZip(){
         showToast('エラー: '+(err.message||err));
       }
     });
+  });
+}
+
+/* ギャラリー内の全写真を共有シート経由でBox等へ送る（スマホ向け） */
+function sharePhotosToBox(){
+  if(!db){showToast('DBエラー');return;}
+  dbGetAll(function(photos){
+    if(!photos||photos.length===0){showToast('送る写真がありません');return;}
+    // 並び順を反映
+    applyLedgerSort(photos);
+    var koji=document.getElementById('inp-koji').value||'工事';
+    // 各写真をJPGファイル化
+    var files=[];
+    photos.forEach(function(p,i){
+      var src=p.dataUrl||'';
+      var idx=src.indexOf('base64,');
+      if(idx<0)return;
+      var num=('000'+(i+1)).slice(-3);
+      var raw=(p.procNo||'')+'_'+((p.itemName||'').replace(/（[^）]*）/g,'').trim())+'_'+(p.mpName||'');
+      var safe=raw.replace(/[\/\\:*?"<>|\s]/g,'_').replace(/_+/g,'_').replace(/^_+|_+$/g,'').substring(0,80);
+      var filename=num+'_'+safe+'.jpg';
+      try{files.push(new File([dataUrlToBlob(src)],filename,{type:'image/jpeg'}));}catch(e){}
+    });
+    if(files.length===0){showToast('写真データを読めませんでした');return;}
+    // まとめて共有できるか判定（主にスマホ）
+    var canFiles=!!(navigator.canShare&&navigator.canShare({files:files}));
+    if(canFiles){
+      var msg='【Boxへ送る】\n\n'+
+              '対象工事: '+koji+'\n'+
+              '写真枚数: '+files.length+'枚\n\n'+
+              'このあと共有メニューが開きます。\n'+
+              '「Box」を選び、保存先フォルダ\n「01_施工写真_連携」を選んで\nアップロードしてください。\n\n'+
+              '続けますか？';
+      if(!confirm(msg))return;
+      navigator.share({files:files,title:koji+' 施工写真'})
+        .then(function(){showToast(files.length+'枚を共有しました');})
+        .catch(function(err){
+          if(err&&err.name==='AbortError')return; // ユーザーがキャンセル
+          // まとめ共有に失敗 → ZIP保存に切替え
+          showToast('まとめ共有に失敗。ZIP保存に切替えます');
+          downloadAllPhotosZip();
+        });
+    } else {
+      // 共有（複数ファイル）非対応（主にPC）→ ZIP保存にフォールバック
+      alert('この端末は写真の「まとめて共有」に対応していません。\n代わりにZIPファイルで保存します。\n保存したZIPをBoxフォルダに入れてください。');
+      downloadAllPhotosZip();
+    }
   });
 }
 
