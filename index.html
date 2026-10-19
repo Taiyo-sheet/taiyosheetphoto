@@ -1551,17 +1551,12 @@ function openCam(pi,ii){
     var i=document.getElementById('cam-input');i.value='';i.click();
   }
 }
-/* PC判定：マウス操作の広い画面。PCではカメラ撮影は基本使わないので、常にフォルダ選択モード */
+/* PC判定：マウス操作の広い画面。PCは初期値をアルバム選択にするが、撮影/アルバムの切替は可能 */
 window.isDesktop=!!(window.matchMedia&&window.matchMedia('(hover:hover) and (pointer:fine)').matches&&window.innerWidth>=900);
-window.shootMode=window.isDesktop?'lib':((localStorage.getItem('rh_shoot_mode')==='lib')?'lib':'cam');
+window.shootMode=(function(){var s=localStorage.getItem('rh_shoot_mode');return (s==='cam'||s==='lib')?s:(window.isDesktop?'lib':'cam');})();
 function updateModeToggle(){/* 下部ナビのボタンはrender()で更新されるため何もしない（後方互換用に関数は残す） */}
 function toggleShootMode(){setShootMode(window.shootMode==='lib'?'cam':'lib');}
 function setShootMode(m){
-  if(window.isDesktop){ // PCはカメラ非対応：常にフォルダ選択
-    window.shootMode='lib';
-    showToast('🖼️ PCではフォルダから写真を選んで振り分けます');
-    render();return;
-  }
   window.shootMode=(m==='lib')?'lib':'cam';
   localStorage.setItem('rh_shoot_mode',window.shootMode);
   render();
@@ -4467,9 +4462,7 @@ function render(){
     '<div class="bottom-nav">'+
     '<button type="button" class="nav-btn-labeled" onclick="triggerImport()"><span class="nav-icon">📥</span><span class="nav-label">データ受信</span></button>'+
     '<button type="button" class="nav-btn-labeled" onclick="exportData()"><span class="nav-icon">📤</span><span class="nav-label">データ送信</span></button>'+
-    (window.isDesktop
-      ?'<button class="nav-btn-labeled nav-mode lib" onclick="openBulkAssign()"><span class="nav-icon">🖼️</span><span class="nav-label">まとめて取込</span></button>'
-      :'<button class="nav-btn-labeled nav-mode'+(window.shootMode==='lib'?' lib':'')+'" onclick="toggleShootMode()"><span class="nav-icon">'+(window.shootMode==='lib'?'🖼️':'📷')+'</span><span class="nav-label">'+(window.shootMode==='lib'?'アルバム':'撮影')+'</span></button>')+
+    '<button type="button" class="nav-btn-labeled nav-mode'+(window.shootMode==='lib'?' lib':'')+'" onclick="toggleShootMode()"><span class="nav-icon">'+(window.shootMode==='lib'?'🖼️':'📷')+'</span><span class="nav-label">'+(window.shootMode==='lib'?'アルバム':'撮影')+'</span></button>'+
     '<button class="nav-btn-labeled" onclick="showGallery()"><span class="nav-icon">🗂️</span><span class="nav-label">ギャラリー</span></button>'+
     '<button class="nav-btn-labeled" onclick="showLedger()"><span class="nav-icon">📋</span><span class="nav-label">写真台帳</span></button>'+
     '</div>';
