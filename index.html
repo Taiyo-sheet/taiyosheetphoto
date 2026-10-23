@@ -4412,7 +4412,7 @@ function goTo(i){currentProc=i;renderMpBar();render();window.scrollTo({top:0,beh
 
 /* Render */
 /* ===== 管理者モード / 現場モード ===== */
-var ADMIN_PASS='taiyo2026'; // 管理者モードの合言葉（変更可。社内だけで共有）
+var ADMIN_PASS='taiyo'; // 管理者モードの合言葉（変更可。社内だけで共有）
 window.isAdmin=(localStorage.getItem('rh_admin')==='1');
 function settingsGate(){
   if(window.isAdmin){showSettings();return;}
