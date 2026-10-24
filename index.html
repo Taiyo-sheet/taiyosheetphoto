@@ -839,6 +839,16 @@ input[type=file]{display:none}
     </div>
   </div>
 </div>
+<div id="cloud-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:15500;align-items:flex-end;justify-content:center">
+  <div style="background:#fff;border-radius:16px 16px 0 0;width:100%;max-width:560px;height:86vh;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom)">
+    <div style="display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid #eee">
+      <button id="cloud-back" style="display:none;background:none;border:none;font-size:14px;font-weight:700;cursor:pointer;color:#0A1A38;font-family:inherit">‹ 戻る</button>
+      <span id="cloud-title" style="flex:1;font-size:15px;font-weight:800;color:#0A1A38">☁️ 全現場（クラウド）</span>
+      <button onclick="cloudClose()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#666">✕</button>
+    </div>
+    <div id="cloud-body" style="overflow-y:auto;flex:1"></div>
+  </div>
+</div>
 <div id="toast" class="toast"></div>
 <div id="mp-edit-overlay" onclick="if(event.target===this)closeMpEdit()">
   <div class="mp-edit-box">
@@ -871,6 +881,8 @@ input[type=file]{display:none}
       </div>
       <div id="sync-status" style="font-size:11px;color:#556;text-align:center">—</div>
     </div>
+
+    <button onclick="closeSettings();cloudOpen()" style="width:100%;height:46px;background:#0061D5;border:none;border-radius:10px;color:#fff;font-size:13px;font-weight:800;font-family:inherit;cursor:pointer;margin-bottom:14px">☁️ 全現場の写真を見る（クラウド集約）</button>
 
     <div class="settings-section-title">📖 基本の使い方</div>
     <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
@@ -1287,6 +1299,95 @@ function syncTest(){
 }
 /* 定期同期：未設定/オフのときは syncTick 内で何もしない */
 setInterval(function(){try{syncTick();}catch(e){}},45000);
+
+/* ===== 管理者：全現場まとめ表示（クラウド集約の閲覧） ===== */
+var _cloudUrls=[];
+function cloudAuthFetch(path){var c=syncCfg();return fetch(c.url+path,{headers:{'Authorization':'Bearer '+c.key}});}
+function cloudMsg(t){return '<div style="padding:30px 16px;text-align:center;color:#889;font-size:13px">'+escapeHtmlSimple(t)+'</div>';}
+function cloudRevoke(){try{_cloudUrls.forEach(function(u){URL.revokeObjectURL(u);});}catch(e){}_cloudUrls=[];}
+function cloudBody(){return document.getElementById('cloud-body');}
+function cloudTitle(t){var el=document.getElementById('cloud-title');if(el)el.textContent=t;}
+function cloudOpen(){
+  var c=syncCfg();
+  if(!c.url||!c.key){alert('先に「☁️ 自動同期」でサーバーURLと合言葉を設定してください');return;}
+  document.getElementById('cloud-overlay').style.display='flex';
+  cloudShowProjects();
+}
+function cloudClose(){document.getElementById('cloud-overlay').style.display='none';cloudRevoke();}
+function cloudShowProjects(){
+  cloudRevoke();
+  cloudTitle('☁️ 全現場（クラウド）');
+  var back=document.getElementById('cloud-back');if(back)back.style.display='none';
+  var b=cloudBody();b.innerHTML='<div style="padding:24px;text-align:center;color:#889">読み込み中…</div>';
+  cloudAuthFetch('/api/projects').then(function(r){
+    if(r.status===401){b.innerHTML=cloudMsg('合言葉が違うようです（401）');return null;}
+    if(!r.ok){b.innerHTML=cloudMsg('取得できませんでした（'+r.status+'）');return null;}
+    return r.json();
+  }).then(function(d){
+    if(!d)return;
+    var ps=(d.projects||[]);
+    if(!ps.length){b.innerHTML=cloudMsg('まだ写真が届いていません');return;}
+    // 稼働中を上に
+    ps.sort(function(a,c){return (a.status==='done'?1:0)-(c.status==='done'?1:0);});
+    var h='';
+    ps.forEach(function(p){
+      var done=p.status==='done';
+      var badge=done
+        ?'<span style="background:#eee;color:#777;border-radius:6px;padding:1px 7px;font-size:10px;font-weight:700">完了</span>'
+        :'<span style="background:#e1f5ee;color:#1d8a56;border-radius:6px;padding:1px 7px;font-size:10px;font-weight:700">稼働中</span>';
+      h+='<button class="cloud-proj" data-id="'+escapeHtmlSimple(p.id)+'" data-name="'+escapeHtmlSimple(p.name||p.id)+'" '
+        +'style="display:block;width:calc(100% - 20px);margin:8px 10px 0;text-align:left;background:#f4f7fb;border:1px solid #dde4ee;border-radius:10px;padding:12px;cursor:pointer;font-family:inherit">'
+        +'<div style="font-weight:800;color:#0A1A38;font-size:14px">'+escapeHtmlSimple(p.name||p.id)+'</div>'
+        +'<div style="font-size:11px;color:#667;margin-top:3px">'+badge+' ・ 写真 '+(p.photo_count||0)+'枚</div>'
+        +'</button>';
+    });
+    b.innerHTML=h;
+    b.querySelectorAll('.cloud-proj').forEach(function(bt){
+      bt.onclick=function(){cloudOpenProject(bt.getAttribute('data-id'),bt.getAttribute('data-name'));};
+    });
+  }).catch(function(){b.innerHTML=cloudMsg('接続できませんでした（ネットワークを確認）');});
+}
+function cloudOpenProject(id,name){
+  cloudRevoke();
+  cloudTitle(name||id);
+  var back=document.getElementById('cloud-back');if(back){back.style.display='block';back.onclick=cloudShowProjects;}
+  var b=cloudBody();b.innerHTML='<div style="padding:24px;text-align:center;color:#889">読み込み中…</div>';
+  cloudAuthFetch('/api/projects/'+encodeURIComponent(id)+'/photos').then(function(r){
+    return r.ok?r.json():null;
+  }).then(function(d){
+    if(!d){b.innerHTML=cloudMsg('取得できませんでした');return;}
+    var ph=(d.photos||[]);
+    if(!ph.length){b.innerHTML=cloudMsg('この工事の写真はまだありません');return;}
+    var h='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px;padding:10px">';
+    ph.forEach(function(p){
+      var cap=(p.item_name||'')+(p.mp_name?(' / '+p.mp_name):'');
+      h+='<div>'
+        +'<img id="cph-'+escapeHtmlSimple(p.id)+'" alt="" style="width:100%;height:84px;object-fit:cover;background:#e8eef7;border-radius:6px;display:block">'
+        +'<div style="font-size:9px;color:#556;line-height:1.25;margin-top:2px;max-height:24px;overflow:hidden">'+escapeHtmlSimple(cap)+'</div>'
+        +'</div>';
+    });
+    h+='</div>';
+    b.innerHTML=h;
+    ph.forEach(function(p){cloudLoadImg(p.id);});
+  }).catch(function(){b.innerHTML=cloudMsg('接続できませんでした');});
+}
+function cloudLoadImg(pid){
+  cloudAuthFetch('/api/photos/'+encodeURIComponent(pid)).then(function(r){
+    return r.ok?r.blob():null;
+  }).then(function(bl){
+    if(!bl)return;
+    var u=URL.createObjectURL(bl);_cloudUrls.push(u);
+    var el=document.getElementById('cph-'+pid);
+    if(el){el.src=u;el.style.cursor='zoom-in';el.onclick=function(){cloudZoom(u);};}
+  }).catch(function(){});
+}
+function cloudZoom(u){
+  var ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:16000;display:flex;align-items:center;justify-content:center;padding:12px';
+  ov.innerHTML='<img src="'+u+'" style="max-width:100%;max-height:100%;object-fit:contain">';
+  ov.onclick=function(){ov.remove();};
+  document.body.appendChild(ov);
+}
 
 /* 一度だけ実行：工程⑧に「通電・停電状況確認」を index=5 に挿入したことに伴う
    既存データのシフト（旧 index 5..15 → 新 index 6..16） */
