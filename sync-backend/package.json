@@ -1,0 +1,15 @@
+{
+  "name": "taiyo-photo-sync",
+  "version": "0.1.0",
+  "private": true,
+  "description": "施工写真 同期バックエンド（Cloudflare Worker + R2 + D1）",
+  "scripts": {
+    "dev": "wrangler dev --local",
+    "deploy": "wrangler deploy",
+    "db:init:local": "wrangler d1 execute taiyo-photo-sync --file=./schema.sql --local",
+    "db:init:remote": "wrangler d1 execute taiyo-photo-sync --file=./schema.sql --remote"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
+  }
+}

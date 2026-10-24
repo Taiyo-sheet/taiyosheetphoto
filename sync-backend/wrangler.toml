@@ -1,0 +1,26 @@
+# 施工写真 同期バックエンド（Cloudflare Worker）設定ファイル
+# ------------------------------------------------------------------
+# ★ セットアップ時に、下の「ここを書き換える」箇所を埋めてください（READMEに手順あり）。
+#   合言葉（SYNC_KEY）はここには書きません。↓のコマンドで別途登録します：
+#     npx wrangler secret put SYNC_KEY
+
+name = "taiyo-photo-sync"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+
+# アプリ（現場・管理者が開くURL）を許可する＝CORS
+[vars]
+ALLOWED_ORIGIN = "https://taiyo-sheet.github.io"
+
+# R2 バケット（写真の実体の置き場所）
+# ★ bucket_name は、作成した R2 バケット名に合わせる（READMEの手順で作成）
+[[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "taiyo-photo-sync"
+
+# D1 データベース（メタ情報）
+# ★ database_id は「wrangler d1 create」実行時に表示される値を貼り付ける
+[[d1_databases]]
+binding = "DB"
+database_name = "taiyo-photo-sync"
+database_id = "ここに d1 create で表示された database_id を貼り付け"
