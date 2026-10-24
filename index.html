@@ -548,7 +548,7 @@ input[type=file]{display:none}
       <span class="info-label">工事件名</span>
       <input type="text" id="inp-koji" class="info-input" placeholder="工事件名を入力" maxlength="40" style="flex:1">
       <button class="proj-switch-btn" onclick="showProjects()" title="工事切替">📁</button>
-      <button class="settings-btn" onclick="showSettings()">⚙️</button>
+      <button class="settings-btn" onclick="settingsGate()">⚙️</button>
       <!-- スマホ：エクスポートのみ -->
       <button class="collapse-btn" id="collapse-btn" onclick="toggleInfoBar()">▲</button>
     </div>
@@ -4411,6 +4411,17 @@ function saveCustomName(pi,ii,v){getState()[pi][ii].customName=v;saveLS();}
 function goTo(i){currentProc=i;renderMpBar();render();window.scrollTo({top:0,behavior:'smooth'});if(typeof notifyTutorialAction==='function'){setTimeout(function(){notifyTutorialAction('proc-changed-'+(i+1));},200);}}
 
 /* Render */
+/* ===== 管理者モード / 現場モード ===== */
+var ADMIN_PASS='taiyo'; // 管理者モードの合言葉（変更可。社内だけで共有）
+window.isAdmin=(localStorage.getItem('rh_admin')==='1');
+function settingsGate(){
+  if(window.isAdmin){showSettings();return;}
+  var p=prompt('🔧 管理者モードの合言葉を入力\n（項目や看板の編集・設定ができます。現場の人はそのまま撮影・ギャラリー・台帳が使えます）');
+  if(p===null)return;
+  if(p===ADMIN_PASS){window.isAdmin=true;localStorage.setItem('rh_admin','1');render();showSettings();showToast('🔧 管理者モードになりました');}
+  else alert('合言葉が違います');
+}
+function exitAdmin(){window.isAdmin=false;localStorage.removeItem('rh_admin');try{closeSettings();}catch(e){}render();showToast('現場モードに戻りました');}
 function render(){
   var proc=PROCESSES[currentProc],ps=getState()[currentProc];
   var ck=0;for(var i=0;i<ps.length;i++){if(ps[i].checked)ck++;}
@@ -4447,7 +4458,7 @@ function render(){
       '</div>'+(hp?'<div class="photo-strip">'+thumbs+'</div>':'')+
       '</div>';
   }
-  var banner='';
+  var banner=window.isAdmin?'<div onclick="exitAdmin()" style="margin:8px 12px 0;background:#0A1A38;color:#FCC383;border:1px solid #FCC383;border-radius:10px;padding:8px 12px;font-size:12px;font-weight:800;text-align:center;cursor:pointer">🔧 管理者モード中 ー 項目・設定を編集できます（タップで終了）</div>':'';
   document.getElementById('app').innerHTML=
     '<div class="header">'+
     '<div class="header-process"><span class="process-badge '+proc.badge+'">'+proc.category+'</span>'+
@@ -4460,7 +4471,7 @@ function render(){
     '<div class="items-list">'+items+'</div>'+
     
     '<div class="bottom-nav">'+
-    '<button type="button" class="nav-btn-labeled" onclick="triggerImport()"><span class="nav-icon">📥</span><span class="nav-label">データ受信</span></button>'+
+    (window.isAdmin?'<button type="button" class="nav-btn-labeled" onclick="triggerImport()"><span class="nav-icon">📥</span><span class="nav-label">データ受信</span></button>':'')+
     '<button type="button" class="nav-btn-labeled" onclick="exportData()"><span class="nav-icon">📤</span><span class="nav-label">データ送信</span></button>'+
     '<button type="button" class="nav-btn-labeled nav-mode'+(window.shootMode==='lib'?' lib':'')+'" onclick="toggleShootMode()"><span class="nav-icon">'+(window.shootMode==='lib'?'🖼️':'📷')+'</span><span class="nav-label">'+(window.shootMode==='lib'?'アルバム':'撮影')+'</span></button>'+
     '<button class="nav-btn-labeled" onclick="showGallery()"><span class="nav-icon">🗂️</span><span class="nav-label">ギャラリー</span></button>'+
@@ -4654,6 +4665,47 @@ function ieFlashRow(i,label){
   clearTimeout(row._ieT);row._ieT=setTimeout(function(){row.classList.remove('ie-flash');var cc=row.querySelector('.ie-chip');if(cc)cc.remove();},1900);
 }
 function openItemEdit(){ieProc=Math.max(0,Math.min(currentProc||0,PROCESSES.length-1));document.getElementById('item-edit-overlay').classList.add('on');document.body.style.overflow='hidden';renderItemEdit();}
+/* 項目を1行＝1項目でまとめて入力（箇条書き貼り付け→置き換え） */
+function ieBulkItems(){
+  var proc=PROCESSES[ieProc];
+  var ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:12000;display:flex;align-items:center;justify-content:center;padding:18px';
+  ov.innerHTML='<div style="background:#fff;border-radius:14px;padding:16px;max-width:420px;width:100%;max-height:88vh;display:flex;flex-direction:column">'+
+    '<div style="font-size:14px;font-weight:800;margin-bottom:4px">📝 項目をまとめて入力</div>'+
+    '<div style="font-size:11px;color:#667;margin-bottom:10px">1行＝1項目。改行で区切って貼り付け／編集できます。工程「'+escapeHtmlSimple(proc.title||'')+'」の項目をこの内容に置き換えます。</div>'+
+    '<textarea id="ie-bulk-ta" style="width:100%;flex:1;min-height:220px;border:1.5px solid #cbd5e6;border-radius:10px;padding:10px;font-size:14px;font-family:inherit;line-height:1.7;box-sizing:border-box"></textarea>'+
+    '<div style="display:flex;gap:8px;margin-top:12px">'+
+      '<button id="ie-bulk-cancel" style="flex:1;height:46px;border:1px solid #dde4ee;background:#fff;border-radius:10px;font-weight:700;font-family:inherit;cursor:pointer">キャンセル</button>'+
+      '<button id="ie-bulk-ok" style="flex:1;height:46px;border:none;background:#F4A33A;color:#0A1A38;border-radius:10px;font-weight:800;font-family:inherit;cursor:pointer">この内容にする</button>'+
+    '</div></div>';
+  document.body.appendChild(ov);
+  document.getElementById('ie-bulk-ta').value=(proc.items||[]).join('\n');
+  document.getElementById('ie-bulk-cancel').onclick=function(){ov.remove();};
+  document.getElementById('ie-bulk-ok').onclick=function(){
+    var lines=(document.getElementById('ie-bulk-ta').value||'').split(/\r?\n/).map(function(s){return s.replace(/^[\s・\-–—•*]+/,'').replace(/^\d+[.．、)]\s*/,'').trim();}).filter(Boolean);
+    if(!lines.length){alert('1項目以上入力してください');return;}
+    var p=ieProc,old=PROCESSES[p],maxOld=old.items.length;
+    if(lines.length<maxOld&&!confirm('項目数が '+maxOld+' → '+lines.length+' に減ります。\nはみ出す項目の写真は削除されます。続けますか？'))return;
+    ov.remove();
+    ensureEditableProcesses();
+    var pr=PROCESSES[p],oldStars=pr.stars||[],oldDims=pr.dims||null;
+    pr.items=lines.slice();
+    pr.stars=lines.map(function(_,i){return oldStars[i]||false;});
+    if(oldDims)pr.dims=lines.map(function(_,i){return oldDims[i]||false;});
+    if(pr.customIdx!=null&&pr.customIdx>=lines.length)pr.customIdx=null;
+    measurementPoints.forEach(function(mp){
+      var st=mp.state[p]||[],ns=[];
+      for(var i=0;i<lines.length;i++)ns.push(st[i]||{checked:false,date:null,photos:[],dim:'',customName:null});
+      mp.state[p]=ns;
+    });
+    saveProcesses();saveLS();
+    idbRewritePhotos(function(v){
+      if(v.procIndex!==p)return false;
+      if(v.itemIndex>=lines.length)return true;
+      v.itemName=lines[v.itemIndex]||'';return false;
+    },function(){reloadPhotos(function(){renderItemEdit();render();showToast('項目を更新しました（'+lines.length+'件）');});});
+  };
+}
 function closeItemEdit(){document.getElementById('item-edit-overlay').classList.remove('on');document.body.style.overflow='';renderMpBar();render();}
 function ieGoProc(i){ieProc=i;renderItemEdit();}
 function ieRenameItem(i,val){ensureEditableProcesses();val=(val||'').trim();PROCESSES[ieProc].items[i]=val;saveProcesses();var p=ieProc;idbRewritePhotos(function(v){if(v.procIndex===p&&v.itemIndex===i)v.itemName=val;return false;});ieFlashRow(i,'✓ 変更しました');showToast('項目名を変更しました');}
@@ -4732,6 +4784,7 @@ function renderItemEdit(){
     h+='<div class="ie-row"><input class="ie-item-input" value="'+escapeHtmlSimple(proc.items[i]||'')+'" onchange="ieRenameItem('+i+',this.value)"><button class="ie-mv" onclick="ieMoveItem('+i+',-1)">▲</button><button class="ie-mv" onclick="ieMoveItem('+i+',1)">▼</button><button class="ie-del" onclick="ieDeleteItem('+i+')">🗑</button></div>';
   });
   h+='<button class="ie-additem" onclick="ieAddItem()">＋ 項目を追加</button>';
+  h+='<button class="ie-additem" style="border-style:solid;border-color:#F4A33A;background:#fff7ec;color:#0A1A38" onclick="ieBulkItems()">📝 まとめて入力（箇条書きを貼り付け）</button>';
   document.getElementById('ie-body').innerHTML=h;
   if(_ieFlash&&_ieFlash.proc===ieProc){ieFlashRow(_ieFlash.idx,_ieFlash.label);}
   _ieFlash=null;
