@@ -66,18 +66,24 @@ body{font-family:'Noto Sans JP','メイリオ',Meiryo,'Hiragino Kaku Gothic ProN
 .dot.partial{background:#F8B358;color:#fff}
 .dot.empty{background:#f0f4fc;color:#b8bec8}
 .dot.active.done::after,.dot.active::after{display:none}
-.items-list{padding:10px 12px;display:flex;flex-direction:column;gap:7px}
-.item-card{background:#fff;border-radius:14px;border:1px solid #dde4ee;overflow:hidden;transition:border-color .15s,background .15s}
+.items-list{padding:8px 10px;display:flex;flex-direction:column;gap:4px}
+.set-group{margin-bottom:8px}
+.set-group>summary{cursor:pointer;list-style:none;font-size:13px;font-weight:800;color:#0A1A38;background:#f4f7fb;border:1px solid #e2e8f2;border-radius:10px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between}
+.set-group>summary::-webkit-details-marker{display:none}
+.set-group>summary::after{content:'▼';font-size:10px;color:#889;margin-left:8px;transition:transform .15s}
+.set-group[open]>summary::after{transform:rotate(180deg)}
+.set-inner{padding:10px 2px 4px}
+.item-card{background:#fff;border-radius:10px;border:1px solid #dde4ee;overflow:hidden;transition:border-color .15s,background .15s}
 .item-card.checked{border-color:#d8dadd;background:#fafafa}
-.item-main{display:flex;align-items:stretch;min-height:50px}
+.item-main{display:flex;align-items:stretch;min-height:42px}
 .check-btn{width:48px;min-width:48px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;background:transparent}
 .item-card.checked .check-btn{background:#E1F5EE}
 .check-icon{width:28px;height:28px;border-radius:50%;border:1.5px solid #d0d4dc;display:flex;align-items:center;justify-content:center;transition:all .15s}
 .item-card.checked .check-icon{border-color:#fff;background:#081634}
 .check-icon svg{width:13px;height:13px;fill:none;stroke:#fff;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;opacity:0}
 .item-card.checked .check-icon svg{opacity:1}
-.item-content{flex:1;padding:8px 6px 8px 2px;display:flex;flex-direction:column;justify-content:center;gap:3px}
-.item-name{font-size:12px;line-height:1.4;color:#1a2a3a;font-weight:500}
+.item-content{flex:1;padding:4px 6px 4px 2px;display:flex;flex-direction:column;justify-content:center;gap:2px}
+.item-name{font-size:12px;line-height:1.3;color:#1a2a3a;font-weight:500}
 .item-name-input{font-size:12px;border:1.5px solid #FCC383;border-radius:4px;padding:3px 7px;width:100%;font-family:inherit;outline:none;background:#fff;color:#1a2a3a}
 .item-meta{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
 .item-date{font-size:10px;color:#666;font-weight:500;letter-spacing:.02em}
@@ -839,6 +845,16 @@ input[type=file]{display:none}
     </div>
   </div>
 </div>
+<div id="cloud-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:15500;align-items:flex-end;justify-content:center">
+  <div style="background:#fff;border-radius:16px 16px 0 0;width:100%;max-width:560px;height:86vh;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom)">
+    <div style="display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid #eee">
+      <button id="cloud-back" style="display:none;background:none;border:none;font-size:14px;font-weight:700;cursor:pointer;color:#0A1A38;font-family:inherit">‹ 戻る</button>
+      <span id="cloud-title" style="flex:1;font-size:15px;font-weight:800;color:#0A1A38">☁️ 全現場（クラウド）</span>
+      <button onclick="cloudClose()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#666">✕</button>
+    </div>
+    <div id="cloud-body" style="overflow-y:auto;flex:1"></div>
+  </div>
+</div>
 <div id="toast" class="toast"></div>
 <div id="mp-edit-overlay" onclick="if(event.target===this)closeMpEdit()">
   <div class="mp-edit-box">
@@ -857,7 +873,26 @@ input[type=file]{display:none}
     <button onclick="closeSettings();openItemEdit()" style="width:100%;height:46px;background:#0A1A38;border:none;border-radius:10px;color:#fff;font-size:13px;font-weight:800;font-family:inherit;cursor:pointer;margin-bottom:6px">📋 この工事の項目を編集・テンプレ適用</button>
     <div style="font-size:10px;color:#999;line-height:1.6;margin-bottom:14px">※ 項目の名前変更・追加・削除・並べ替え、工程(タブ)の追加/削除、テンプレの保存/適用ができます。変更は<b>この工事だけ</b>に反映されます。</div>
 
-    <div class="settings-section-title">📖 基本の使い方</div>
+    <details class="set-group"><summary>☁️ 自動同期の設定</summary><div class="set-inner">
+    <div style="background:#eef4ff;border:1px solid #b9ccf5;border-radius:10px;padding:10px 12px;margin-bottom:6px">
+      <div style="font-size:10px;color:#556;line-height:1.6;margin-bottom:8px">撮った写真を自動でクラウドに集めます。<b>URLと合言葉を入れて「オン」にしたときだけ</b>動きます（空ならオフ＝従来どおり）。</div>
+      <label style="display:block;font-size:11px;font-weight:700;color:#334;margin-bottom:2px">サーバーURL</label>
+      <input id="sync-url" type="text" placeholder="https://...workers.dev" style="width:100%;height:38px;border:1.5px solid #cbd5e6;border-radius:8px;padding:0 10px;font-size:12px;font-family:inherit;box-sizing:border-box;margin-bottom:8px">
+      <label style="display:block;font-size:11px;font-weight:700;color:#334;margin-bottom:2px">合言葉（SYNC_KEY）</label>
+      <input id="sync-key" type="text" placeholder="サーバーに設定した合言葉" style="width:100%;height:38px;border:1.5px solid #cbd5e6;border-radius:8px;padding:0 10px;font-size:12px;font-family:inherit;box-sizing:border-box;margin-bottom:8px">
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:#334;margin-bottom:10px"><input id="sync-on" type="checkbox">自動同期をオンにする</label>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <button onclick="syncTest()" style="flex:1;height:40px;border:1px solid #90b0f0;background:#fff;color:#0A1A38;border-radius:8px;font-weight:700;font-family:inherit;cursor:pointer">接続テスト</button>
+        <button onclick="syncSaveSettings()" style="flex:1;height:40px;border:none;background:#0A1A38;color:#fff;border-radius:8px;font-weight:800;font-family:inherit;cursor:pointer">保存</button>
+      </div>
+      <div id="sync-status" style="font-size:11px;color:#556;text-align:center">—</div>
+    </div>
+    </div></details>
+
+    <button onclick="closeSettings();cloudOpen()" style="width:100%;height:46px;background:#0061D5;border:none;border-radius:10px;color:#fff;font-size:13px;font-weight:800;font-family:inherit;cursor:pointer;margin-bottom:14px">☁️ 全現場の写真を見る（クラウド集約）</button>
+
+    <details class="set-group"><summary>📖 使い方・ヘルプ</summary><div class="set-inner">
+    <div class="settings-section-title" style="margin-top:4px">📖 基本の使い方</div>
     <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
       <div style="display:flex;align-items:center;gap:10px;background:#f0f4fc;border-radius:8px;padding:8px 10px">
         <span style="font-size:18px">✏️</span><div style="font-size:11px"><b>工事件名・場所・施工業者</b>を画面上部に入力する</div>
@@ -935,8 +970,10 @@ input[type=file]{display:none}
 
     <div class="settings-section-title">🎓 使い方ガイド</div>
     <button onclick="closeSettings();setTimeout(startTutorial,250)" style="width:100%;height:44px;border:1px solid #1D9E75;background:#E1F5EE;color:#0d6b4c;border-radius:10px;font-weight:700;font-size:12px;cursor:pointer;margin-bottom:14px;font-family:inherit">▶️ チュートリアルをもう一度見る</button>
+    </div></details>
 
-    <div class="settings-section-title">🔧 データ修復</div>
+    <details class="set-group"><summary>🔧 データ修復（上級）</summary><div class="set-inner">
+    <div class="settings-section-title" style="margin-top:4px">🔧 データ修復</div>
     <div style="background:#fef3e6;border:1px solid #f0a050;border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:11px;color:#8B6F2A;line-height:1.7">
       <b>工程⑧（電気検査）の項目追加でデータがずれている場合の修復</b><br>
       「通電・停電状況確認」を追加した影響で、項目とチェック・撮影日がズレている場合に押してください。
@@ -960,6 +997,7 @@ input[type=file]{display:none}
       ※ PDF提出時の見た目を揃えたい時に使ってください。<br>
       ※ 一度白に統一すると、後から半透明に戻すには元画像が必要です。
     </div>
+    </div></details>
 
     <button class="settings-close" onclick="closeSettings()">閉じる</button>
   </div>
@@ -1096,9 +1134,10 @@ function dbAdd(mpIdx,piIdx,iiIdx,dataUrl,originalUrl,kanbanData,cb){
     originalUrl:originalUrl||null,
     kanbanData:kanbanData||null,
     date:Date.now(),
+    uid:syncNewUid(),syncedAt:null,
     projectId:currentProjectId};
   var r=tx.objectStore('photos').add(rec);
-  r.onsuccess=function(e){if(cb)cb(e.target.result);};
+  r.onsuccess=function(e){if(cb)cb(e.target.result);try{syncKick();}catch(e2){}};
   r.onerror=function(){if(cb)cb(null);};
 }
 function dbGetAll(cb){
@@ -1133,6 +1172,234 @@ function dbDelete(id,cb){
   var tx=db.transaction('photos','readwrite');
   tx.objectStore('photos').delete(id);
   tx.oncomplete=function(){if(cb)cb();};
+}
+
+/* ===== 写真の自動同期（Phase2・URL＋合言葉を設定しオンにしたときだけ動作） =====
+   設定が無い／オフなら完全に何もしない（従来どおりの動き）。 */
+function syncNewUid(){try{return crypto.randomUUID();}catch(e){return 'u'+Date.now()+'-'+Math.random().toString(36).slice(2);}}
+function syncCfg(){
+  return {
+    url:(localStorage.getItem('rh_sync_url')||'').replace(/\/+$/,''),
+    key:localStorage.getItem('rh_sync_key')||'',
+    on:localStorage.getItem('rh_sync_on')==='1'
+  };
+}
+function syncEnabled(){var c=syncCfg();return !!(c.on&&c.url&&c.key);}
+var _syncBusy=false;
+function syncKick(){setTimeout(function(){try{syncTick();}catch(e){}},300);}
+function syncTick(){
+  if(_syncBusy||!syncEnabled()||!db)return;
+  _syncBusy=true;
+  var c=syncCfg();
+  var r;
+  try{r=db.transaction('photos','readonly').objectStore('photos').getAll();}
+  catch(e){_syncBusy=false;return;}
+  r.onerror=function(){_syncBusy=false;};
+  r.onsuccess=function(e){
+    var all=e.target.result||[];
+    var pending=all.filter(function(p){return !p.syncedAt;});
+    if(!pending.length){_syncBusy=false;return;}
+    var batch=pending.slice(0,5); // 一度に5枚ずつ
+    var names=syncProjectNames();
+    var i=0;
+    (function next(){
+      if(i>=batch.length){_syncBusy=false;syncKick();return;} // 残りがあれば継続
+      var rec=batch[i++];
+      syncUploadOne(rec,c,names,function(ok){
+        if(ok)syncMarkDone(rec.id);
+        setTimeout(next, ok?150:2000); // 失敗時は間を空けて次へ
+      });
+    })();
+  };
+}
+function syncProjectNames(){
+  var map={};
+  try{(getProjects()||[]).forEach(function(p){map[p.id]=p.name;});}catch(e){}
+  return map;
+}
+function syncUploadOne(rec,c,names,cb){
+  var src=rec.dataUrl||rec.originalUrl;
+  if(!src){cb(true);return;} // 画像が無いものは同期済み扱いにしてスキップ
+  syncCompress(src,function(blob){
+    if(!blob){cb(false);return;}
+    var pid=rec.projectId||'default';
+    var fd=new FormData();
+    fd.append('project_id',pid);
+    fd.append('project_name',names[pid]||'');
+    fd.append('proc_index',rec.procIndex!=null?rec.procIndex:'');
+    fd.append('item_index',rec.itemIndex!=null?rec.itemIndex:'');
+    fd.append('item_name',rec.itemName||'');
+    fd.append('mp_name',rec.mpName||'');
+    fd.append('taken_at',rec.date?new Date(rec.date).toISOString():'');
+    fd.append('photo_id',rec.uid||('legacy-'+rec.id));
+    fd.append('photo',blob,(rec.uid||rec.id)+'.jpg');
+    fetch(c.url+'/api/photos',{method:'POST',headers:{'Authorization':'Bearer '+c.key},body:fd})
+      .then(function(res){cb(res.ok);})
+      .catch(function(){cb(false);});
+  });
+}
+function syncCompress(dataUrl,cb){
+  try{
+    var img=new Image();
+    img.onload=function(){
+      var max=1600,w=img.width,h=img.height;
+      if(w>max||h>max){var s=Math.min(max/w,max/h);w=Math.round(w*s);h=Math.round(h*s);}
+      var cv=document.createElement('canvas');cv.width=w;cv.height=h;
+      cv.getContext('2d').drawImage(img,0,0,w,h);
+      if(cv.toBlob)cv.toBlob(function(b){cb(b);},'image/jpeg',0.7);
+      else cb(syncDataUrlToBlob(cv.toDataURL('image/jpeg',0.7)));
+    };
+    img.onerror=function(){cb(null);};
+    img.src=dataUrl;
+  }catch(e){cb(null);}
+}
+function syncDataUrlToBlob(durl){
+  try{var parts=durl.split(',');var bin=atob(parts[1]);var arr=new Uint8Array(bin.length);
+    for(var i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return new Blob([arr],{type:'image/jpeg'});}
+  catch(e){return null;}
+}
+function syncMarkDone(id){
+  try{
+    var tx=db.transaction('photos','readwrite');var st=tx.objectStore('photos');
+    var g=st.get(id);
+    g.onsuccess=function(e){var v=e.target.result;if(v){v.syncedAt=Date.now();st.put(v);}};
+  }catch(e){}
+}
+/* --- 設定画面（管理者）用 --- */
+function syncStatus(cb){
+  if(!db){cb({total:0,pending:0});return;}
+  var r;try{r=db.transaction('photos','readonly').objectStore('photos').getAll();}catch(e){cb({total:0,pending:0});return;}
+  r.onsuccess=function(e){var all=e.target.result||[];var pend=all.filter(function(p){return !p.syncedAt;}).length;cb({total:all.length,pending:pend});};
+  r.onerror=function(){cb({total:0,pending:0});};
+}
+function syncRenderSettings(){
+  var c=syncCfg();
+  var u=document.getElementById('sync-url');if(u)u.value=c.url;
+  var k=document.getElementById('sync-key');if(k)k.value=c.key;
+  var t=document.getElementById('sync-on');if(t)t.checked=c.on;
+  syncUpdateStatusLine();
+}
+function syncUpdateStatusLine(){
+  var el=document.getElementById('sync-status');if(!el)return;
+  if(!syncEnabled()){el.textContent='（未設定／オフ：自動同期していません）';return;}
+  syncStatus(function(s){el.textContent='同期済 '+(s.total-s.pending)+'枚 ／ 未同期 '+s.pending+'枚';});
+}
+function syncSaveSettings(){
+  var url=(document.getElementById('sync-url').value||'').trim();
+  var key=(document.getElementById('sync-key').value||'').trim();
+  var on=document.getElementById('sync-on').checked;
+  localStorage.setItem('rh_sync_url',url);
+  localStorage.setItem('rh_sync_key',key);
+  localStorage.setItem('rh_sync_on',on?'1':'0');
+  showToast('同期設定を保存しました');
+  syncUpdateStatusLine();
+  if(syncEnabled())syncKick();
+}
+function syncTest(){
+  var url=(document.getElementById('sync-url').value||'').trim().replace(/\/+$/,'');
+  var key=(document.getElementById('sync-key').value||'').trim();
+  if(!url){alert('サーバーURLを入力してください');return;}
+  var el=document.getElementById('sync-status');if(el)el.textContent='接続テスト中…';
+  fetch(url+'/api/projects',{headers:{'Authorization':'Bearer '+key}})
+    .then(function(res){
+      if(res.status===401){alert('合言葉が違うようです（401）');if(el)el.textContent='認証エラー（合言葉を確認）';return;}
+      if(!res.ok){alert('接続できませんでした（'+res.status+'）');if(el)el.textContent='接続エラー';return;}
+      return res.json().then(function(d){alert('接続OK！ 登録済みの工事：'+((d.projects||[]).length)+'件');syncUpdateStatusLine();});
+    })
+    .catch(function(){alert('接続できませんでした（URL・ネットワークを確認）');if(el)el.textContent='接続失敗';});
+}
+/* 定期同期：未設定/オフのときは syncTick 内で何もしない */
+setInterval(function(){try{syncTick();}catch(e){}},45000);
+/* 電波が戻った瞬間に自動で再送（オフライン→オンライン復帰） */
+window.addEventListener('online',function(){try{syncKick();}catch(e){}});
+
+/* ===== 管理者：全現場まとめ表示（クラウド集約の閲覧） ===== */
+var _cloudUrls=[];
+function cloudAuthFetch(path){var c=syncCfg();return fetch(c.url+path,{headers:{'Authorization':'Bearer '+c.key}});}
+function cloudMsg(t){return '<div style="padding:30px 16px;text-align:center;color:#889;font-size:13px">'+escapeHtmlSimple(t)+'</div>';}
+function cloudRevoke(){try{_cloudUrls.forEach(function(u){URL.revokeObjectURL(u);});}catch(e){}_cloudUrls=[];}
+function cloudBody(){return document.getElementById('cloud-body');}
+function cloudTitle(t){var el=document.getElementById('cloud-title');if(el)el.textContent=t;}
+function cloudOpen(){
+  var c=syncCfg();
+  if(!c.url||!c.key){alert('先に「☁️ 自動同期」でサーバーURLと合言葉を設定してください');return;}
+  document.getElementById('cloud-overlay').style.display='flex';
+  cloudShowProjects();
+}
+function cloudClose(){document.getElementById('cloud-overlay').style.display='none';cloudRevoke();}
+function cloudShowProjects(){
+  cloudRevoke();
+  cloudTitle('☁️ 全現場（クラウド）');
+  var back=document.getElementById('cloud-back');if(back)back.style.display='none';
+  var b=cloudBody();b.innerHTML='<div style="padding:24px;text-align:center;color:#889">読み込み中…</div>';
+  cloudAuthFetch('/api/projects').then(function(r){
+    if(r.status===401){b.innerHTML=cloudMsg('合言葉が違うようです（401）');return null;}
+    if(!r.ok){b.innerHTML=cloudMsg('取得できませんでした（'+r.status+'）');return null;}
+    return r.json();
+  }).then(function(d){
+    if(!d)return;
+    var ps=(d.projects||[]);
+    if(!ps.length){b.innerHTML=cloudMsg('まだ写真が届いていません');return;}
+    // 稼働中を上に
+    ps.sort(function(a,c){return (a.status==='done'?1:0)-(c.status==='done'?1:0);});
+    var h='';
+    ps.forEach(function(p){
+      var done=p.status==='done';
+      var badge=done
+        ?'<span style="background:#eee;color:#777;border-radius:6px;padding:1px 7px;font-size:10px;font-weight:700">完了</span>'
+        :'<span style="background:#e1f5ee;color:#1d8a56;border-radius:6px;padding:1px 7px;font-size:10px;font-weight:700">稼働中</span>';
+      h+='<button class="cloud-proj" data-id="'+escapeHtmlSimple(p.id)+'" data-name="'+escapeHtmlSimple(p.name||p.id)+'" '
+        +'style="display:block;width:calc(100% - 20px);margin:8px 10px 0;text-align:left;background:#f4f7fb;border:1px solid #dde4ee;border-radius:10px;padding:12px;cursor:pointer;font-family:inherit">'
+        +'<div style="font-weight:800;color:#0A1A38;font-size:14px">'+escapeHtmlSimple(p.name||p.id)+'</div>'
+        +'<div style="font-size:11px;color:#667;margin-top:3px">'+badge+' ・ 写真 '+(p.photo_count||0)+'枚</div>'
+        +'</button>';
+    });
+    b.innerHTML=h;
+    b.querySelectorAll('.cloud-proj').forEach(function(bt){
+      bt.onclick=function(){cloudOpenProject(bt.getAttribute('data-id'),bt.getAttribute('data-name'));};
+    });
+  }).catch(function(){b.innerHTML=cloudMsg('接続できませんでした（ネットワークを確認）');});
+}
+function cloudOpenProject(id,name){
+  cloudRevoke();
+  cloudTitle(name||id);
+  var back=document.getElementById('cloud-back');if(back){back.style.display='block';back.onclick=cloudShowProjects;}
+  var b=cloudBody();b.innerHTML='<div style="padding:24px;text-align:center;color:#889">読み込み中…</div>';
+  cloudAuthFetch('/api/projects/'+encodeURIComponent(id)+'/photos').then(function(r){
+    return r.ok?r.json():null;
+  }).then(function(d){
+    if(!d){b.innerHTML=cloudMsg('取得できませんでした');return;}
+    var ph=(d.photos||[]);
+    if(!ph.length){b.innerHTML=cloudMsg('この工事の写真はまだありません');return;}
+    var h='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px;padding:10px">';
+    ph.forEach(function(p){
+      var cap=(p.item_name||'')+(p.mp_name?(' / '+p.mp_name):'');
+      h+='<div>'
+        +'<img id="cph-'+escapeHtmlSimple(p.id)+'" alt="" style="width:100%;height:84px;object-fit:cover;background:#e8eef7;border-radius:6px;display:block">'
+        +'<div style="font-size:9px;color:#556;line-height:1.25;margin-top:2px;max-height:24px;overflow:hidden">'+escapeHtmlSimple(cap)+'</div>'
+        +'</div>';
+    });
+    h+='</div>';
+    b.innerHTML=h;
+    ph.forEach(function(p){cloudLoadImg(p.id);});
+  }).catch(function(){b.innerHTML=cloudMsg('接続できませんでした');});
+}
+function cloudLoadImg(pid){
+  cloudAuthFetch('/api/photos/'+encodeURIComponent(pid)).then(function(r){
+    return r.ok?r.blob():null;
+  }).then(function(bl){
+    if(!bl)return;
+    var u=URL.createObjectURL(bl);_cloudUrls.push(u);
+    var el=document.getElementById('cph-'+pid);
+    if(el){el.src=u;el.style.cursor='zoom-in';el.onclick=function(){cloudZoom(u);};}
+  }).catch(function(){});
+}
+function cloudZoom(u){
+  var ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:16000;display:flex;align-items:center;justify-content:center;padding:12px';
+  ov.innerHTML='<img src="'+u+'" style="max-width:100%;max-height:100%;object-fit:contain">';
+  ov.onclick=function(){ov.remove();};
+  document.body.appendChild(ov);
 }
 
 /* 一度だけ実行：工程⑧に「通電・停電状況確認」を index=5 に挿入したことに伴う
@@ -4072,6 +4339,7 @@ function showSettings(){
     var disabled=localStorage.getItem('rh_disable_cam_rotate')==='1';
     btn.textContent=disabled?'📱 撮影画面の自動横向き回転：OFF':'📱 撮影画面の自動横向き回転：ON';
   }
+  try{syncRenderSettings();}catch(e){}
 }
 function closeSettings(){document.getElementById('settings-overlay').style.display='none';}
 
@@ -4472,7 +4740,7 @@ function render(){
     
     '<div class="bottom-nav">'+
     (window.isAdmin?'<button type="button" class="nav-btn-labeled" onclick="triggerImport()"><span class="nav-icon">📥</span><span class="nav-label">データ受信</span></button>':'')+
-    '<button type="button" class="nav-btn-labeled" onclick="exportData()"><span class="nav-icon">📤</span><span class="nav-label">データ送信</span></button>'+
+    (window.isAdmin?'<button type="button" class="nav-btn-labeled" onclick="exportData()"><span class="nav-icon">📤</span><span class="nav-label">データ送信</span></button>':'')+
     '<button type="button" class="nav-btn-labeled nav-mode'+(window.shootMode==='lib'?' lib':'')+'" onclick="toggleShootMode()"><span class="nav-icon">'+(window.shootMode==='lib'?'🖼️':'📷')+'</span><span class="nav-label">'+(window.shootMode==='lib'?'アルバム':'撮影')+'</span></button>'+
     '<button class="nav-btn-labeled" onclick="showGallery()"><span class="nav-icon">🗂️</span><span class="nav-label">ギャラリー</span></button>'+
     '<button class="nav-btn-labeled" onclick="showLedger()"><span class="nav-icon">📋</span><span class="nav-label">写真台帳</span></button>'+
@@ -4538,7 +4806,7 @@ initDB(function(){
   }
   // 既存データの工程⑧シフト処理（一度だけ実行）
   migrateProc8InsertSlot5(function(){
-    loadLS();loadPhotosFromDB(function(){renderMpBar();render();updateModeToggle();
+    loadLS();loadPhotosFromDB(function(){renderMpBar();render();updateModeToggle();try{syncKick();}catch(e){}
     // 真の初回起動のみチュートリアル表示
     // - rh_tutorial_done: 新チュートリアル視聴済み
     // - rh_guide_done: 旧ガイド視聴済み（既存ユーザー）
