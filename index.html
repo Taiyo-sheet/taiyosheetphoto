@@ -4740,7 +4740,7 @@ function render(){
     
     '<div class="bottom-nav">'+
     (window.isAdmin?'<button type="button" class="nav-btn-labeled" onclick="triggerImport()"><span class="nav-icon">📥</span><span class="nav-label">データ受信</span></button>':'')+
-    '<button type="button" class="nav-btn-labeled" onclick="exportData()"><span class="nav-icon">📤</span><span class="nav-label">データ送信</span></button>'+
+    (window.isAdmin?'<button type="button" class="nav-btn-labeled" onclick="exportData()"><span class="nav-icon">📤</span><span class="nav-label">データ送信</span></button>':'')+
     '<button type="button" class="nav-btn-labeled nav-mode'+(window.shootMode==='lib'?' lib':'')+'" onclick="toggleShootMode()"><span class="nav-icon">'+(window.shootMode==='lib'?'🖼️':'📷')+'</span><span class="nav-label">'+(window.shootMode==='lib'?'アルバム':'撮影')+'</span></button>'+
     '<button class="nav-btn-labeled" onclick="showGallery()"><span class="nav-icon">🗂️</span><span class="nav-label">ギャラリー</span></button>'+
     '<button class="nav-btn-labeled" onclick="showLedger()"><span class="nav-icon">📋</span><span class="nav-label">写真台帳</span></button>'+
