@@ -1,0 +1,30 @@
+# Render Blueprint（任意・ワンクリック構成用）
+# ---------------------------------------------------------------
+# Render ダッシュボードの「New +」→「Blueprint」でこのリポジトリを選ぶと、
+# 下記の Web サービス（Node API）と Postgres データベースをまとめて作成します。
+#
+# 注意：データベースの plan 名は時期により変わることがあります。
+#       もし Blueprint が plan エラーを出す場合は databases: の plan 行を
+#       削除してダッシュボードでプランを選ぶか、server/README.md の
+#       「手動セットアップ」手順で作成してください。
+services:
+  - type: web
+    name: taiyosheet-sync
+    runtime: node
+    rootDir: server
+    plan: starter            # 常時起動（スリープ無し）。無料で試すなら free
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: taiyosheet-db
+          property: connectionString
+      - key: WRITE_TOKEN
+        sync: false          # 任意。書き込み保護したい場合のみ値を設定
+
+databases:
+  - name: taiyosheet-db
+    plan: basic-256mb        # 有料の小さめプラン。無料で試すなら free（30日で期限）
