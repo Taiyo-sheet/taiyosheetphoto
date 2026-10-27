@@ -18,5 +18,6 @@
 - #24 (draft) Phase2 Step1-3：写真の自動集約(Cloudflare)＋アプリの自動同期・圧縮・全現場まとめ表示
 - #22 (draft) クラウド共有バックエンド(Render+Postgres) … #24に包含・クローズ推奨
 
-## 管理ドキュメント
+## 管理ドキュメント・決定
 - 2026-10-27 開発管理ドキュメント(DEVELOPMENT_STATUS/PENDING_DECISIONS/TODO/CHANGELOG)を新規作成（本ブランチ claude/dev-docs）
+- 2026-10-27 方針決定：同期は**Render版(#22)採用**／公開は**承認制**／バックエンド構築は**社内承認待ちで保留**。確認は A/B/C 簡潔形式に統一。
