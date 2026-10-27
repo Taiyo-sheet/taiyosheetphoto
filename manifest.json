@@ -1,0 +1,16 @@
+{
+  "name": "TAIYOSHEET 施工写真台帳",
+  "short_name": "施工写真",
+  "description": "施工写真の撮影・看板合成・台帳作成アプリ",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#081634",
+  "theme_color": "#0A1A38",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
