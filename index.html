@@ -1080,26 +1080,63 @@ function initDB(cb){
       d.createObjectStore('photos',{keyPath:'id',autoIncrement:true});
     }
   };
-  req.onsuccess=function(e){db=e.target.result;if(cb)cb();};
+  req.onsuccess=function(e){db=e.target.result;checkStorageRoom();if(cb)cb();};
   req.onerror=function(){if(cb)cb();};
 }
+/* 写真を保存する。保存が「確定」してから cb(id) を呼ぶ。失敗したら cb(null, エラー)。
+   ※ 以前は add の成功だけで「保存できた」としていたため、空き容量が足りずに確定できなかった写真も
+     「追加しました」と表示され、開き直すと消えていた（tx.oncomplete まで待つ） */
 function dbAdd(mpIdx,piIdx,iiIdx,dataUrl,originalUrl,kanbanData,cb){
   // 後方互換シグネチャ吸収
   if(typeof originalUrl==='function'){cb=originalUrl;originalUrl=null;kanbanData=null;}
   else if(typeof kanbanData==='function'){cb=kanbanData;kanbanData=null;}
-  if(!db){if(cb)cb(null);return;}
-  var tx=db.transaction('photos','readwrite');
-  var rec={mpIndex:mpIdx,procIndex:piIdx,itemIndex:iiIdx,
-    mpName:measurementPoints[mpIdx].name,
-    procNo:PROCESSES[piIdx].no,procTitle:PROCESSES[piIdx].title,
-    itemName:getItemName(piIdx,iiIdx),dataUrl:dataUrl,
-    originalUrl:originalUrl||null,
-    kanbanData:kanbanData||null,
-    date:Date.now(),
-    projectId:currentProjectId};
-  var r=tx.objectStore('photos').add(rec);
-  r.onsuccess=function(e){if(cb)cb(e.target.result);};
-  r.onerror=function(){if(cb)cb(null);};
+  var done=false;
+  function fin(id,err){if(done)return;done=true;if(cb)cb(id,err);}
+  if(!db){fin(null,new Error('db'));return;}
+  var tx,r,newId=null;
+  try{
+    tx=db.transaction('photos','readwrite');
+    var rec={mpIndex:mpIdx,procIndex:piIdx,itemIndex:iiIdx,
+      mpName:measurementPoints[mpIdx].name,
+      procNo:PROCESSES[piIdx].no,procTitle:PROCESSES[piIdx].title,
+      itemName:getItemName(piIdx,iiIdx),dataUrl:dataUrl,
+      originalUrl:originalUrl||null,
+      kanbanData:kanbanData||null,
+      date:Date.now(),
+      projectId:currentProjectId};
+    r=tx.objectStore('photos').add(rec);
+  }catch(e){fin(null,e);return;}
+  r.onsuccess=function(e){newId=e.target.result;}; // まだ確定ではない
+  tx.oncomplete=function(){fin(newId);};           // 確定したときだけ成功
+  tx.onabort=function(){fin(null,tx.error||(r&&r.error)||new Error('abort'));};
+  tx.onerror=function(){/* 続けて onabort が来る */};
+}
+/* 写真を保存できなかったとき。小さな表示（トースト）ではなく、閉じるまで残る案内を出す */
+function showSaveFailed(n){
+  var old=document.getElementById('save-failed-ov');if(old)old.remove();
+  var ov=document.createElement('div');ov.id='save-failed-ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:100000;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.innerHTML='<div style="background:#fff;border-radius:14px;padding:20px;width:100%;max-width:340px;box-sizing:border-box">'+
+    '<div style="font-size:16px;font-weight:800;color:#c00;margin-bottom:8px">⚠ 写真を保存できませんでした'+(n>1?'（'+n+'枚）':'')+'</div>'+
+    '<div style="font-size:13px;color:#333;line-height:1.7">端末の空き容量が足りない可能性があります。<b>この写真は、アプリには残っていません。</b><br><br>'+
+    '・撮りなおす前に、スマホの空き容量を作ってください（不要な写真・動画・アプリを消す）<br>'+
+    '・今の写真を残したいときは、「共有・保存」で写真アプリに保存してください</div>'+
+    '<button id="save-failed-ok" style="width:100%;height:44px;margin-top:14px;background:#0A1A38;border:none;border-radius:8px;color:#fff;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer">わかった</button></div>';
+  document.body.appendChild(ov);
+  document.getElementById('save-failed-ok').onclick=function(){ov.remove();};
+}
+/* 空き容量が少ないとき、起動時に知らせる。あわせて「端末に消されにくくする」お願いをする */
+function checkStorageRoom(){
+  try{
+    if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(function(){});
+    if(navigator.storage&&navigator.storage.estimate){
+      navigator.storage.estimate().then(function(e){
+        if(e&&e.quota&&e.usage/e.quota>0.85){
+          showToast('端末の空き容量が少なくなっています。写真が保存できなくなる前に、整理してください');
+        }
+      }).catch(function(){});
+    }
+  }catch(e){}
 }
 function dbGetAll(cb){
   if(!db){cb([]);return;}
@@ -1923,7 +1960,7 @@ function updateCamKanban(){
   ];
   var html='';
   fields.forEach(function(f){
-    if(f.v) html+='<div class="cam-kanban-row"><div class="cam-kanban-lbl">'+f.l+'</div><div class="cam-kanban-val">'+f.v+'</div></div>';
+    if(f.v) html+='<div class="cam-kanban-row"><div class="cam-kanban-lbl">'+f.l+'</div><div class="cam-kanban-val">'+escapeHtmlSimple(f.v)+'</div></div>';
   });
   document.getElementById('cam-kanban-body').innerHTML=html;
   setTimeout(function(){rotateCamKanban();},10);
@@ -1992,7 +2029,7 @@ function batchAddToItem(files){
   var loading=document.getElementById('loading');
   var txt=loading.querySelector('.ld-txt');var origTxt=txt?txt.textContent:'';
   loading.className='on';
-  var added=0,i=0;
+  var added=0,failed=0,i=0;
   function next(){
     if(txt)txt.textContent='取り込み中… '+(i)+'/'+arr.length;
     if(i>=arr.length){
@@ -2001,14 +2038,18 @@ function batchAddToItem(files){
         if(!st[pi][ii].checked){st[pi][ii].checked=true;st[pi][ii].date=Date.now();}
         saveLS();render();
       }
-      showToast(added+'枚を追加しました');
+      if(failed){showSaveFailed(failed);if(added>0)showToast(added+'枚は追加できました');}
+      else showToast(added+'枚を追加しました');
       return;
     }
     var f=arr[i++];
     buildComposite(f,function(err,res){
       if(err){next();return;}
       dbAdd(currentMP,pi,ii,res.composite,res.original,res.kanbanData,function(id){
-        st[pi][ii].photos.push({id:id||Date.now(),dataUrl:res.composite,originalUrl:res.original,kanbanData:res.kanbanData});
+        if(!id){ // 保存できなかった：空き容量がないときは、続けても同じなので止める
+          failed=arr.length-i+1;i=arr.length;next();return;
+        }
+        st[pi][ii].photos.push({id:id,dataUrl:res.composite,originalUrl:res.original,kanbanData:res.kanbanData});
         added++;next();
       });
     });
@@ -2273,6 +2314,7 @@ function pvShare(){
   if(camTarget&&!camTarget.savedToGallery){
     dbAdd(currentMP,camTarget.pi,camTarget.ii,compositeDataUrl,originalDataUrl,currentKanbanData,function(id){
       if(id){getState()[camTarget.pi][camTarget.ii].photos.push({id:id,dataUrl:compositeDataUrl,originalUrl:originalDataUrl,kanbanData:currentKanbanData});camTarget.savedToGallery=true;}
+      else showSaveFailed(1);
     });
   }
 }
@@ -2294,7 +2336,8 @@ function pvAddCheck(){
   var pi=camTarget.pi,ii=camTarget.ii,st=getState();
   if(!camTarget.savedToGallery){
     dbAdd(currentMP,pi,ii,compositeDataUrl,originalDataUrl,currentKanbanData,function(id){
-      st[pi][ii].photos.push({id:id||Date.now(),dataUrl:compositeDataUrl,originalUrl:originalDataUrl,kanbanData:currentKanbanData});
+      if(!id){showSaveFailed(1);return;} // 保存できていないので「追加しました」とは出さず、プレビューも閉じない（共有・保存はまだ使える）
+      st[pi][ii].photos.push({id:id,dataUrl:compositeDataUrl,originalUrl:originalDataUrl,kanbanData:currentKanbanData});
       if(!st[pi][ii].checked){st[pi][ii].checked=true;st[pi][ii].date=Date.now();}
       camTarget.savedToGallery=true;
       saveLS();pvClose();showToast('リストとギャラリーに追加しました');render();
@@ -2338,7 +2381,7 @@ function showGallery(){
       html+='<div class="gal-proc'+(isCollapsed?' collapsed':'')+'" data-proc="'+k+'">';
       html+='<div class="gal-proc-header" onclick="toggleGalProc(\''+k+'\')">';
       html+='<span class="gal-proc-arrow">'+(isCollapsed?'▶':'▼')+'</span>';
-      html+='<span class="gal-proc-title">'+(g.procNo||'')+' '+(g.procTitle||'')+'</span>';
+      html+='<span class="gal-proc-title">'+escapeHtmlSimple((g.procNo||'')+' '+(g.procTitle||''))+'</span>';
       html+='<span class="gal-proc-count">'+totalCount+'枚</span>';
       html+='</div>';
       html+='<div class="gal-proc-body"'+(isCollapsed?' style="display:none"':'')+'>';
@@ -2346,14 +2389,14 @@ function showGallery(){
       g._order.sort(function(a,b){return parseInt(a)-parseInt(b);}).forEach(function(ik){
         var it=g.items[ik];
         html+='<div class="gal-item-group">';
-        html+='<div class="gal-item-header"><span class="gal-item-header-label">'+(g.procNo||'')+' '+(it.itemName||'')+'</span><span class="gal-item-header-count">'+it.photos.length+'枚</span></div>';
+        html+='<div class="gal-item-header"><span class="gal-item-header-label">'+escapeHtmlSimple((g.procNo||'')+' '+(it.itemName||''))+'</span><span class="gal-item-header-count">'+it.photos.length+'枚</span></div>';
         html+='<div class="gal-grid">';
         it.photos.forEach(function(p){
           window._photoCache=window._photoCache||{};window._photoCache[p.id]=p;
           var sel=(window._selMode&&window._selPhotos&&window._selPhotos[p.id])?' selected':'';
           var checkMark=window._selMode?'<div class="gal-sel-check"></div>':'';
           var subLabel=(p.mpName||'');
-          html+='<div class="gal-item'+sel+'" data-pid="'+p.id+'" onclick="galTap('+p.id+',event)"  ontouchstart="galTouchStart('+p.id+',event)" ontouchend="galTouchEnd(event)" ontouchmove="galTouchMove(event)" onmousedown="galMouseDown('+p.id+')" onmouseup="galMouseUp()" onmouseleave="galMouseUp()"><img class="gal-thumb" src="'+p.dataUrl+'" data-pid="'+p.id+'" alt="">'+checkMark+'<div class="gal-item-label">'+subLabel+'</div><button class="gal-del" onclick="event.stopPropagation();galDelete('+p.id+')">✕</button></div>';
+          html+='<div class="gal-item'+sel+'" data-pid="'+p.id+'" onclick="galTap('+p.id+',event)"  ontouchstart="galTouchStart('+p.id+',event)" ontouchend="galTouchEnd(event)" ontouchmove="galTouchMove(event)" onmousedown="galMouseDown('+p.id+')" onmouseup="galMouseUp()" onmouseleave="galMouseUp()"><img class="gal-thumb" src="'+p.dataUrl+'" data-pid="'+p.id+'" alt="">'+checkMark+'<div class="gal-item-label">'+escapeHtmlSimple(subLabel)+'</div><button class="gal-del" onclick="event.stopPropagation();galDelete('+p.id+')">✕</button></div>';
         });
         html+='</div></div>';
       });
@@ -3134,7 +3177,7 @@ function renderLedger(){
       ' ontouchstart="ledTouchStart(event,'+i+')" ontouchmove="ledTouchMove(event)" ontouchend="ledTouchEnd(event)">';
     thumbHtml+='<span class="led-thumb-num">'+(i+1)+'</span>';
     thumbHtml+='<img class="led-thumb-img" src="'+p.dataUrl+'" alt="">';
-    thumbHtml+='<div class="led-thumb-label">'+(p.procNo||'')+(p.mpName?'-'+p.mpName:'')+(p.itemName?'<br>'+p.itemName.replace(/（[^）]*）/g,'').trim():'')+'</div>';
+    thumbHtml+='<div class="led-thumb-label">'+escapeHtmlSimple(p.procNo||'')+(p.mpName?'-'+escapeHtmlSimple(p.mpName):'')+(p.itemName?'<br>'+escapeHtmlSimple(p.itemName.replace(/（[^）]*）/g,'').trim()):'')+'</div>';
     thumbHtml+='</div>';
   });
   var thumbEl=document.getElementById('led-thumb-list');
@@ -3157,14 +3200,14 @@ function renderLedger(){
   html+='<div class="led-cover-field">';
   html+='<span class="led-cover-field-label">'+spreadLabel('工　　期')+'</span>';
   html+='<div style="flex:1;display:flex;gap:10px">';
-  html+='<div class="led-cover-period-row"><span class="led-cover-period-label">着　工</span><div class="led-cover-field-value" style="flex:1"><input class="led-cover-input" style="font-size:12px" id="rh_cover_period1" placeholder="〇〇年〇〇月〇〇日" value="'+period.replace(/"/g,"&quot;")+'"></div></div>';
-  html+='<div class="led-cover-period-row"><span class="led-cover-period-label">完　工</span><div class="led-cover-field-value" style="flex:1"><input class="led-cover-input" style="font-size:12px" id="rh_cover_period2" placeholder="〇〇年〇〇月〇〇日" value="'+period2.replace(/"/g,"&quot;")+'"></div></div>';
+  html+='<div class="led-cover-period-row"><span class="led-cover-period-label">着　工</span><div class="led-cover-field-value" style="flex:1"><input class="led-cover-input" style="font-size:12px" id="rh_cover_period1" placeholder="〇〇年〇〇月〇〇日" value="'+escapeHtmlSimple(period)+'"></div></div>';
+  html+='<div class="led-cover-period-row"><span class="led-cover-period-label">完　工</span><div class="led-cover-field-value" style="flex:1"><input class="led-cover-input" style="font-size:12px" id="rh_cover_period2" placeholder="〇〇年〇〇月〇〇日" value="'+escapeHtmlSimple(period2)+'"></div></div>';
   html+='</div></div>';
   html+=coverFieldEditable('施　工　者','inp-company',company);
   // 発注者の表示／非表示は工事ごとに保存（既定は表示）
   var clientVisible=(localStorage.getItem(pKey('rh_show_client'))||'true')!=='false';
   if(clientVisible){
-    html+='<div class="led-cover-field"><span class="led-cover-field-label">'+spreadLabel('発　注　者')+'</span><div class="led-cover-field-value" contenteditable="true" id="rh_cover_client" data-placeholder="入力してください">'+(client||'')+'</div><button class="led-cover-field-toggle no-print" onclick="setClientVisible(false)" title="発注者欄を非表示">✕</button></div>';
+    html+='<div class="led-cover-field"><span class="led-cover-field-label">'+spreadLabel('発　注　者')+'</span><div class="led-cover-field-value" contenteditable="true" id="rh_cover_client" data-placeholder="入力してください">'+escapeHtmlSimple(client||'')+'</div><button class="led-cover-field-toggle no-print" onclick="setClientVisible(false)" title="発注者欄を非表示">✕</button></div>';
   } else {
     html+='<div class="led-cover-field-addback no-print"><button class="led-cover-add-btn" onclick="setClientVisible(true)">+ 発注者欄を表示</button></div>';
   }
@@ -3310,7 +3353,7 @@ function ledTouchEnd(e){
   _ti=null;_tel=null;_tDragging=false;
 }
 function ledCapRow(label,value){
-  return '<div class="led-cap-row"><span class="led-cap-label">'+label+'：</span><span class="led-cap-value">'+value+'</span></div>';
+  return '<div class="led-cap-row"><span class="led-cap-label">'+label+'：</span><span class="led-cap-value">'+escapeHtmlSimple(value)+'</span></div>';
 }
 function ledCaptionHtml(koji,place,mpName,itemName,dateStr,photoId,ov){
   ov=ov||{};
@@ -4175,7 +4218,7 @@ function importData(input){
       overlay.innerHTML=
         '<div style="background:#fff;border-radius:14px;padding:20px;width:100%;max-width:320px;box-sizing:border-box">'+
           '<div style="font-size:15px;font-weight:700;color:#0A1A38;margin-bottom:6px">📥 データ受信方法を選択</div>'+
-          '<div style="font-size:12px;color:#666;margin-bottom:16px">「<b>'+kojiName+'</b>」（'+data.photos.length+'枚）</div>'+
+          '<div style="font-size:12px;color:#666;margin-bottom:16px">「<b>'+escapeHtmlSimple(kojiName)+'</b>」（'+data.photos.length+'枚）</div>'+
           '<div style="display:flex;flex-direction:column;gap:10px">'+
             '<button id="import-add" style="width:100%;padding:12px;background:#1D9E75;border:none;border-radius:10px;color:#fff;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;text-align:left">'+
               '➕ 追加（マージ）<br><span style="font-size:10px;font-weight:400">現在の工事に写真を追加・進捗をマージ（重複除外）</span>'+
@@ -4324,7 +4367,7 @@ function showProjects(){
     html+='<div style="display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid #f0f0f0;gap:10px">'+
       '<div onclick="switchProject(\''+p.id+'\')" style="flex:1;cursor:pointer">'+
         '<div style="font-size:14px;font-weight:'+(isCurrent?'700':'400')+';color:'+(isCurrent?'#0A1A38':'#333')+'">'+
-        (isCurrent?'✅ ':'')+p.name+'</div>'+
+        (isCurrent?'✅ ':'')+escapeHtmlSimple(p.name)+'</div>'+
       '</div>'+
       (list.length>1?'<button onclick="deleteProject(\''+p.id+'\')" style="background:rgba(220,50,50,.08);border:1px solid rgba(220,50,50,.2);color:#c00;width:28px;height:28px;border-radius:6px;font-size:13px;cursor:pointer">✕</button>':'')+
     '</div>';
@@ -4382,7 +4425,7 @@ function deleteProject(id){
   overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
   overlay.innerHTML='<div style="background:#fff;border-radius:14px;padding:20px;width:100%;max-width:300px;box-sizing:border-box">'+
     '<div style="font-size:15px;font-weight:700;color:#c00;margin-bottom:8px">🗑️ 工事を削除</div>'+
-    '<div style="font-size:13px;color:#333;margin-bottom:16px">「'+p.name+'」を削除しますか？<br><span style="color:#c00;font-size:11px">写真データも全て削除されます。この操作は取り消せません。</span></div>'+
+    '<div style="font-size:13px;color:#333;margin-bottom:16px">「'+escapeHtmlSimple(p.name)+'」を削除しますか？<br><span style="color:#c00;font-size:11px">写真データも全て削除されます。この操作は取り消せません。</span></div>'+
     '<div style="display:flex;gap:8px">'+
       '<button id="del-cancel" style="flex:1;height:42px;background:#f0f4fc;border:none;border-radius:8px;font-size:14px;font-family:inherit;cursor:pointer">キャンセル</button>'+
       '<button id="del-ok" style="flex:1;height:42px;background:#c00;border:none;border-radius:8px;color:#fff;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer">削除する</button>'+
@@ -4443,9 +4486,9 @@ function render(){
     var thumbs='';
     for(var pi=0;pi<s.photos.length;pi++){var ph=s.photos[pi];var src=ph.dataUrl||ph;var pid=(ph&&ph.id)||0;if(pid){window._photoCache=window._photoCache||{};window._photoCache[pid]=ph;}thumbs+='<img class="photo-thumb" src="'+src+'" data-pid="'+pid+'" onclick="openPhotoByPid(this)" alt="">';}
     var nameHtml=isCustom?
-      '<input type="text" class="item-name-input" placeholder="作業内容を自由入力（例：追加工事内容）" value="'+(s.customName||'')+'" oninput="saveCustomName('+currentProc+','+ii+',this.value)">':
-      '<div class="item-name">'+proc.items[ii]+'</div>';
-    var dimHtml=isDim?'<div class="dim-row"><span class="dim-label">実寸：</span><input type="text" class="dim-input" placeholder="例：幅18mm 深63mm" value="'+(s.dim||'')+'" oninput="saveDim('+currentProc+','+ii+',this.value)"></div>':'';
+      '<input type="text" class="item-name-input" placeholder="作業内容を自由入力（例：追加工事内容）" value="'+escapeHtmlSimple(s.customName||'')+'" oninput="saveCustomName('+currentProc+','+ii+',this.value)">':
+      '<div class="item-name">'+escapeHtmlSimple(proc.items[ii])+'</div>';
+    var dimHtml=isDim?'<div class="dim-row"><span class="dim-label">実寸：</span><input type="text" class="dim-input" placeholder="例：幅18mm 深63mm" value="'+escapeHtmlSimple(s.dim||'')+'" oninput="saveDim('+currentProc+','+ii+',this.value)"></div>':'';
     items+='<div class="item-card '+(s.checked?'checked':'')+'"><div class="item-main">'+
       '<button class="check-btn" onclick="toggleCheck('+currentProc+','+ii+')"><div class="check-icon"><svg viewBox="0 0 12 10"><polyline points="1,5 4,9 11,1"/></svg></div></button>'+
       '<div class="item-content">'+nameHtml+dimHtml+
@@ -4461,9 +4504,9 @@ function render(){
   var banner=window.isAdmin?'<div onclick="exitAdmin()" style="margin:8px 12px 0;background:#0A1A38;color:#FCC383;border:1px solid #FCC383;border-radius:10px;padding:8px 12px;font-size:12px;font-weight:800;text-align:center;cursor:pointer">🔧 管理者モード中 ー 項目・設定を編集できます（タップで終了）</div>':'';
   document.getElementById('app').innerHTML=
     '<div class="header">'+
-    '<div class="header-process"><span class="process-badge '+proc.badge+'">'+proc.category+'</span>'+
-    '<span class="process-name">'+proc.no+' '+proc.title+'</span></div>'+
-    '<div class="process-sub">'+proc.sub+'</div>'+
+    '<div class="header-process"><span class="process-badge '+escapeHtmlSimple(proc.badge||'')+'">'+escapeHtmlSimple(proc.category||'')+'</span>'+
+    '<span class="process-name">'+escapeHtmlSimple((proc.no||'')+' '+(proc.title||''))+'</span></div>'+
+    '<div class="process-sub">'+escapeHtmlSimple(proc.sub||'')+'</div>'+
     '<div class="progress-bar-wrap"><div class="progress-bar" style="width:'+pct+'%"></div></div>'+
     '<div class="progress-text">'+ck+' / '+tot+' 完了（'+pct+'%）</div></div>'+
     banner+
@@ -4586,8 +4629,12 @@ function baAssignSel(id,val){
   buildComposite(cur.file,function(err,res){
     if(err){camTarget=savedCam;loading.className='';if(txt)txt.textContent=orig;_baBusy=false;showToast('画像の読み込みに失敗');return;}
     dbAdd(currentMP,pi,ii,res.composite,res.original,res.kanbanData,function(newid){
+      if(!newid){ // 保存できなかった：振り分け前の写真はそのまま残す
+        camTarget=savedCam;loading.className='';if(txt)txt.textContent=orig;_baBusy=false;
+        showSaveFailed(1);return;
+      }
       var s=getState()[pi][ii];
-      s.photos.push({id:newid||Date.now(),dataUrl:res.composite,originalUrl:res.original,kanbanData:res.kanbanData});
+      s.photos.push({id:newid,dataUrl:res.composite,originalUrl:res.original,kanbanData:res.kanbanData});
       if(!s.checked){s.checked=true;s.date=Date.now();}
       camTarget=savedCam;
       try{if(cur.url)URL.revokeObjectURL(cur.url);}catch(_){}
@@ -4610,7 +4657,7 @@ function baItemOptions(){
 function renderBulkAssign(){
   if(!document.getElementById('bulk-assign').classList.contains('on'))return;
   // 測点チップ
-  var mp='<span class="ba-mp-lbl">'+curMpLabel()+'</span>';
+  var mp='<span class="ba-mp-lbl">'+escapeHtmlSimple(curMpLabel())+'</span>';
   for(var m=0;m<measurementPoints.length;m++){mp+='<button class="'+(m===currentMP?'on':'')+'" onclick="baGoMp('+m+')">'+escapeHtmlSimple(measurementPoints[m].name)+'</button>';}
   document.getElementById('ba-mp').innerHTML=mp;
   // 写真一覧（各写真にドロップダウンで項目選択）
@@ -4805,6 +4852,12 @@ function renderItemEdit(){
   window.addEventListener('focus',acquire);
   acquire();
 })();
+</script>
+<script>
+/* 電波のない現場でも、一度開いたあとは起動できるようにする（sw.js）。https（と動作確認用の localhost）のときだけ。失敗してもアプリはふつうに動く */
+if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')){
+  window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});
+}
 </script>
 </body>
 </html>
