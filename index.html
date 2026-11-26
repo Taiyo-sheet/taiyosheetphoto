@@ -1554,18 +1554,9 @@ function openCam(pi,ii){
   updateCamMpDisplay();
   // チュートリアル通知
   if(typeof notifyTutorialAction==='function')setTimeout(function(){notifyTutorialAction('camera-opened');},200);
-  if(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia){
-    updateCamKanban();
-    document.getElementById('cam-view').className='on';
-    document.body.style.overflow='hidden';
-    // 看板を90度CW回転（左上に正確に配置）
-    setTimeout(function(){fitCamFrame();rotateCamKanban();},50);
-    navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}})
-      .then(function(s){cameraStream=s;var v=document.getElementById('cam-video');v.srcObject=s;v.play();})
-      .catch(function(){closeCameraView();var i=document.getElementById('cam-input');i.value='';i.click();});
-  } else {
-    var i=document.getElementById('cam-input');i.value='';i.click();
-  }
+  // 夜間でも明るく撮れるよう、端末の標準カメラで撮影する（ナイトモード等が有効）。
+  // 看板は撮影後に自動合成される（processPickedImage）。
+  var i=document.getElementById('cam-input');i.value='';i.click();
 }
 /* PC判定：マウス操作の広い画面。PCは初期値をアルバム選択にするが、撮影/アルバムの切替は可能 */
 window.isDesktop=!!(window.matchMedia&&window.matchMedia('(hover:hover) and (pointer:fine)').matches&&window.innerWidth>=900);
