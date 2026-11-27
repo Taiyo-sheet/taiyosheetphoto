@@ -427,6 +427,9 @@ input[type=file]{display:none}
 .led-row.drop-above::before{content:'';position:absolute;left:-2px;right:-2px;top:-6px;height:6px;background:#dc2626;border-radius:3px;z-index:30;box-shadow:0 0 0 2px #fff,0 2px 6px rgba(220,38,38,.5);pointer-events:none}
 .led-row.drop-below::after{content:'';position:absolute;left:-2px;right:-2px;bottom:-6px;height:6px;background:#dc2626;border-radius:3px;z-index:30;box-shadow:0 0 0 2px #fff,0 2px 6px rgba(220,38,38,.5);pointer-events:none}
 @media print {.no-print-drag{cursor:default !important}.led-row.dragging-row{box-shadow:none !important;background:transparent !important;opacity:1 !important;transform:none !important}.led-row.drop-above::before,.led-row.drop-below::after{display:none !important}}
+.led-drag-handle{position:absolute;top:4px;left:4px;z-index:25;width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:rgba(10,26,56,.72);color:#fff;font-size:18px;line-height:1;border-radius:9px;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.led-drag-handle:active{cursor:grabbing;background:#dc2626}
+@media print {.led-drag-handle{display:none !important}}
 .led-row-empty{height:85mm;margin-bottom:3mm}
 .led-row:last-child{margin-bottom:0}
 .led-photo{position:relative;flex:0 0 66%;overflow:hidden;background:#fff;height:85mm;box-sizing:border-box;border:1px solid #aaa}
@@ -777,9 +780,18 @@ input[type=file]{display:none}
 
 <div id="access-gate" style="display:none;position:fixed;inset:0;background:#081634;z-index:100001;flex-direction:column;align-items:center;justify-content:center;padding:24px;gap:14px">
   <img id="access-logo" alt="TAIYOSHEET" style="height:34px;background:#fff;padding:5px 11px;border-radius:9px;margin-bottom:4px">
-  <div style="color:#fff;font-size:14px;font-weight:700;text-align:center">パスワードを入力してください</div>
-  <input id="access-pass" type="password" autocomplete="off" placeholder="現場または管理者のパスワード" style="width:100%;max-width:300px;height:48px;border-radius:10px;border:none;padding:0 14px;font-size:16px;font-family:inherit;box-sizing:border-box" onkeydown="if(event.key==='Enter')submitAccess()">
-  <button onclick="submitAccess()" style="width:100%;max-width:300px;height:48px;border:none;border-radius:10px;background:#F4A33A;color:#0A1A38;font-size:15px;font-weight:800;font-family:inherit;cursor:pointer">入る</button>
+  <div style="color:#fff;font-size:14px;font-weight:700;text-align:center;margin-bottom:2px">ログイン</div>
+  <div style="width:100%;max-width:320px;background:#fff;border-radius:12px;padding:16px;box-sizing:border-box">
+    <div style="color:#0A1A38;font-size:15px;font-weight:800;margin-bottom:4px">👷 現場の方</div>
+    <div style="color:#5a6b85;font-size:12px;margin-bottom:10px">現場パスワードを入力してください</div>
+    <input id="acc-worker" type="password" autocomplete="off" placeholder="現場パスワード" style="width:100%;height:46px;border-radius:10px;border:1px solid #cdd6e6;padding:0 14px;font-size:16px;font-family:inherit;box-sizing:border-box;margin-bottom:10px" onkeydown="if(event.key==='Enter')submitWorker()">
+    <button onclick="submitWorker()" style="width:100%;height:46px;border:none;border-radius:10px;background:#F4A33A;color:#0A1A38;font-size:15px;font-weight:800;font-family:inherit;cursor:pointer">撮影をはじめる</button>
+  </div>
+  <div style="width:100%;max-width:320px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);border-radius:12px;padding:16px;box-sizing:border-box">
+    <div style="color:#fff;font-size:14px;font-weight:800;margin-bottom:10px">🔧 管理者の方</div>
+    <input id="acc-admin" type="password" autocomplete="off" placeholder="管理者パスワード" style="width:100%;height:46px;border-radius:10px;border:none;padding:0 14px;font-size:16px;font-family:inherit;box-sizing:border-box;margin-bottom:10px" onkeydown="if(event.key==='Enter')submitAdmin()">
+    <button onclick="submitAdmin()" style="width:100%;height:46px;border:1px solid rgba(255,255,255,0.3);border-radius:10px;background:#0A1A38;color:#fff;font-size:14px;font-weight:800;font-family:inherit;cursor:pointer">管理者で入る</button>
+  </div>
   <div id="access-err" style="color:#ff9a9a;font-size:12px;min-height:16px;font-weight:700"></div>
 </div>
 <div id="guide-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;align-items:center;justify-content:center;padding:16px">
@@ -1554,18 +1566,9 @@ function openCam(pi,ii){
   updateCamMpDisplay();
   // チュートリアル通知
   if(typeof notifyTutorialAction==='function')setTimeout(function(){notifyTutorialAction('camera-opened');},200);
-  if(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia){
-    updateCamKanban();
-    document.getElementById('cam-view').className='on';
-    document.body.style.overflow='hidden';
-    // 看板を90度CW回転（左上に正確に配置）
-    setTimeout(function(){fitCamFrame();rotateCamKanban();},50);
-    navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}})
-      .then(function(s){cameraStream=s;var v=document.getElementById('cam-video');v.srcObject=s;v.play();})
-      .catch(function(){closeCameraView();var i=document.getElementById('cam-input');i.value='';i.click();});
-  } else {
-    var i=document.getElementById('cam-input');i.value='';i.click();
-  }
+  // 夜間でも明るく撮れるよう、端末の標準カメラで撮影する（ナイトモード等が有効）。
+  // 看板は撮影後に自動合成される（processPickedImage）。
+  var i=document.getElementById('cam-input');i.value='';i.click();
 }
 /* PC判定：マウス操作の広い画面。PCは初期値をアルバム選択にするが、撮影/アルバムの切替は可能 */
 window.isDesktop=!!(window.matchMedia&&window.matchMedia('(hover:hover) and (pointer:fine)').matches&&window.innerWidth>=900);
@@ -2936,8 +2939,8 @@ function printLedger(){
     });
     grid.remove();
   }
-  // 全端末：ブラウザ標準の印刷ダイアログで印刷（PDF生成はやめて「印刷」に統一）
-  {
+  // PC・Android：ブラウザ標準の印刷ダイアログで印刷
+  if(!isIOS){
     setTimeout(function(){
       window.print();
       setTimeout(function(){
@@ -2946,7 +2949,7 @@ function printLedger(){
     },200);
     return;
   }
-  // iOS：html2canvas+jsPDFでPDFダウンロード
+  // iOS：標準印刷が不安定なため、html2canvas+jsPDFでPDFを生成（保存して印刷できる）
   showToast('PDF生成中…少々お待ちください');
   loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',function(){
     if(typeof html2canvas==='undefined'){
@@ -3199,10 +3202,10 @@ function renderLedger(){
       var globalIdx=p*perPage+i;
       if(ph){
         html+='<div class="led-row no-print-drag" draggable="true" data-gidx="'+globalIdx+'"'+
-          ' ondragstart="ledRowDragStart(event,'+globalIdx+')" ondragover="ledRowDragOver(event)" ondrop="ledRowDrop(event,'+globalIdx+')" ondragend="ledRowDragEnd(event)"'+
-          ' ontouchstart="ledRowTouchStart(event,'+globalIdx+')" ontouchmove="ledRowTouchMove(event)" ontouchend="ledRowTouchEnd(event)">';
+          ' ondragstart="ledRowDragStart(event,'+globalIdx+')" ondragover="ledRowDragOver(event)" ondrop="ledRowDrop(event,'+globalIdx+')" ondragend="ledRowDragEnd(event)">';
         var d='';
         if(ph.date){var dt=new Date(ph.date);d=dt.getFullYear()+'年'+(dt.getMonth()+1)+'月'+dt.getDate()+'日';}
+        html+='<div class="led-drag-handle no-print" ontouchstart="ledRowTouchStart(event,'+globalIdx+')" ontouchmove="ledRowTouchMove(event)" ontouchend="ledRowTouchEnd(event)" title="長押しして並び替え">⠿</div>';
         html+='<div class="led-photo no-print-cursor" onclick="openLedgerPhoto('+(ph.id||'null')+')" style="cursor:pointer"><img src="'+ph.dataUrl+'" alt=""></div>';
         html+=ledCaptionHtml(koji,place,ph.mpName||'',ph.itemName||'',d,ph.id,ph.ledgerCaption);
         html+='</div>';
@@ -3539,7 +3542,8 @@ function ledRowDrop(e,gidx){
 }
 function ledRowTouchStart(e,gidx){
   if(_isEditableTarget(e.target))return;
-  _rdi=gidx;_rtel=e.currentTarget;_rDragging=false;
+  if(e.cancelable)e.preventDefault();
+  _rdi=gidx;_rtel=(e.currentTarget&&e.currentTarget.closest)?e.currentTarget.closest('.led-row'):e.currentTarget;_rDragging=false;
   if(e.touches&&e.touches[0]){_rStartX=e.touches[0].clientX;_rStartY=e.touches[0].clientY;}
   _rLongPress=setTimeout(function(){
     _rDragging=true;
@@ -4443,24 +4447,37 @@ function initAccessGate(){
     var acc=localStorage.getItem('rh_access');
     if(acc!=='admin'&&acc!=='worker'){
       g.style.display='flex'; document.body.style.overflow='hidden';
-      var ip=document.getElementById('access-pass'); if(ip)setTimeout(function(){try{ip.focus();}catch(e){}},150);
+      var ip=document.getElementById('acc-worker'); if(ip)setTimeout(function(){try{ip.focus();}catch(e){}},150);
     }
   }catch(e){}
 }
-function submitAccess(){
-  var ip=document.getElementById('access-pass'), err=document.getElementById('access-err');
-  var v=ip?ip.value:'';
-  if(v===ADMIN_PASS){localStorage.setItem('rh_access','admin');localStorage.setItem('rh_admin','1');window.isAdmin=true;}
-  else if(v===WORKER_PASS){localStorage.setItem('rh_access','worker');localStorage.removeItem('rh_admin');window.isAdmin=false;}
-  else{if(err)err.textContent='パスワードが違います';if(ip){ip.value='';try{ip.focus();}catch(e){}}return;}
-  if(err)err.textContent='';
+function _grantAccess(mode){
+  if(mode==='admin'){localStorage.setItem('rh_access','admin');localStorage.setItem('rh_admin','1');window.isAdmin=true;}
+  else{localStorage.setItem('rh_access','worker');localStorage.removeItem('rh_admin');window.isAdmin=false;}
+  var err=document.getElementById('access-err'); if(err)err.textContent='';
   var g=document.getElementById('access-gate'); if(g)g.style.display='none'; document.body.style.overflow='';
   try{renderMpBar();render();}catch(e){}
 }
+function submitWorker(){
+  var ip=document.getElementById('acc-worker'), err=document.getElementById('access-err');
+  var v=(ip?ip.value:'').trim();
+  if(v===WORKER_PASS){_grantAccess('worker');}
+  else if(v===ADMIN_PASS){_grantAccess('admin');}
+  else{if(err)err.textContent='現場パスワードが違います';if(ip){ip.value='';try{ip.focus();}catch(e){}}}
+}
+function submitAdmin(){
+  var ip=document.getElementById('acc-admin'), err=document.getElementById('access-err');
+  var v=(ip?ip.value:'').trim();
+  if(v===ADMIN_PASS){_grantAccess('admin');}
+  else{if(err)err.textContent='管理者パスワードが違います';if(ip){ip.value='';try{ip.focus();}catch(e){}}}
+}
+// 旧・単一入力用（後方互換）
+function submitAccess(){submitWorker();}
 function logoutApp(){
   try{closeSettings();}catch(e){}
   localStorage.removeItem('rh_access'); localStorage.removeItem('rh_admin'); window.isAdmin=false;
-  var ip=document.getElementById('access-pass'); if(ip)ip.value='';
+  var ip=document.getElementById('acc-worker'); if(ip)ip.value='';
+  var ia=document.getElementById('acc-admin'); if(ia)ia.value='';
   try{render();}catch(e){}
   initAccessGate();
 }
@@ -4513,7 +4530,7 @@ function render(){
   var banner=window.isAdmin?'<div onclick="exitAdmin()" style="margin:8px 12px 0;background:#0A1A38;color:#FCC383;border:1px solid #FCC383;border-radius:10px;padding:8px 12px;font-size:12px;font-weight:800;text-align:center;cursor:pointer">🔧 管理者モード中 ー 項目・設定を編集できます（タップで終了）</div>':'';
   document.getElementById('app').innerHTML=
     '<div class="header">'+
-    '<div class="header-process"><span class="process-badge '+proc.badge+'">'+proc.category+'</span>'+
+    '<div class="header-process">'+(proc.category?'<span class="process-badge '+proc.badge+'">'+escapeHtmlSimple(proc.category)+'</span>':'')+
     '<span class="process-name">'+proc.no+' '+escapeHtmlSimple(proc.title)+'</span></div>'+
     '<div class="process-sub">'+escapeHtmlSimple(proc.sub)+'</div>'+
     '<div class="progress-bar-wrap"><div class="progress-bar" style="width:'+pct+'%"></div></div>'+
@@ -4763,6 +4780,7 @@ function closeItemEdit(){document.getElementById('item-edit-overlay').classList.
 function ieGoProc(i){ieProc=i;renderItemEdit();}
 function ieRenameItem(i,val){ensureEditableProcesses();val=(val||'').trim();PROCESSES[ieProc].items[i]=val;saveProcesses();var p=ieProc;idbRewritePhotos(function(v){if(v.procIndex===p&&v.itemIndex===i)v.itemName=val;return false;});ieFlashRow(i,'✓ 変更しました');showToast('項目名を変更しました');}
 function ieRenameProc(val){ensureEditableProcesses();val=(val||'').trim();PROCESSES[ieProc].title=val;saveProcesses();var p=ieProc;idbRewritePhotos(function(v){if(v.procIndex===p)v.procTitle=val;return false;});var t=document.querySelector('.ie-proc-title');if(t){t.classList.add('ie-flash');clearTimeout(t._ieT);t._ieT=setTimeout(function(){t.classList.remove('ie-flash');},1900);}showToast('工程名を変更しました');}
+function ieRenameCategory(val){ensureEditableProcesses();val=(val||'').trim();PROCESSES[ieProc].category=val;saveProcesses();saveLS();render();showToast(val?('工種名を「'+val+'」に変更しました'):'工種名を空（表示なし）にしました');}
 function ieAddItem(){var n=prompt('追加する項目名');if(n===null)return;n=n.trim();if(!n)return;ensureEditableProcesses();var p=PROCESSES[ieProc];p.items.push(n);p.stars.push(false);if(p.dims)p.dims.push(false);measurementPoints.forEach(function(mp){mp.state[ieProc].push({checked:false,date:null,photos:[],dim:'',customName:null});});saveProcesses();saveLS();_ieFlash={proc:ieProc,idx:PROCESSES[ieProc].items.length-1,label:'✓ 追加しました'};renderItemEdit();render();showToast('項目を追加しました');}
 function ieDeleteItem(i){var p=ieProc;if(PROCESSES[p].items.length<=1){showToast('項目は1つ以上必要です');return;}if(!confirm('「'+getItemName(p,i)+'」を削除しますか？\nこの項目の写真も削除されます。'))return;ensureEditableProcesses();PROCESSES[p].items.splice(i,1);PROCESSES[p].stars.splice(i,1);if(PROCESSES[p].dims)PROCESSES[p].dims.splice(i,1);if(PROCESSES[p].customIdx!=null&&PROCESSES[p].customIdx>=i)PROCESSES[p].customIdx=(PROCESSES[p].customIdx===i?null:PROCESSES[p].customIdx-1);measurementPoints.forEach(function(mp){mp.state[p].splice(i,1);});saveProcesses();saveLS();idbRewritePhotos(function(v){if(v.procIndex!==p)return false;if(v.itemIndex===i)return true;if(v.itemIndex>i){v.itemIndex--;v.itemName=PROCESSES[p].items[v.itemIndex]||'';}return false;},function(){reloadPhotos(function(){renderItemEdit();showToast('項目を削除しました');});});}
 function ieMoveItem(i,dir){var p=ieProc,j=i+dir,pr=PROCESSES[p];if(j<0||j>=pr.items.length)return;ensureEditableProcesses();pr=PROCESSES[p];function sw(a){if(!a)return;var t=a[i];a[i]=a[j];a[j]=t;}sw(pr.items);sw(pr.stars);sw(pr.dims);measurementPoints.forEach(function(mp){sw(mp.state[p]);});saveProcesses();saveLS();_ieFlash={proc:p,idx:j,label:(dir<0?'▲ 上へ移動':'▼ 下へ移動')};idbRewritePhotos(function(v){if(v.procIndex!==p)return false;if(v.itemIndex===i){v.itemIndex=j;v.itemName=pr.items[j]||'';}else if(v.itemIndex===j){v.itemIndex=i;v.itemName=pr.items[i]||'';}return false;},function(){reloadPhotos(function(){renderItemEdit();});});}
@@ -4833,6 +4851,7 @@ function renderItemEdit(){
   document.getElementById('ie-procbar').innerHTML=pb;
   var proc=PROCESSES[ieProc];var h='';
   h+='<div class="ie-proc-head"><input class="ie-proc-title" value="'+escapeHtmlSimple(proc.title||'')+'" onchange="ieRenameProc(this.value)" placeholder="工程名"><button class="ie-delproc" onclick="ieDeleteProc()">工程削除</button></div>';
+  h+='<div style="margin-bottom:12px"><input class="ie-proc-title" style="width:100%" value="'+escapeHtmlSimple(proc.category||'')+'" onchange="ieRenameCategory(this.value)" placeholder="工種名（看板の頭に付く・空欄なら無し／例：電気工事）"></div>';
   proc.items.forEach(function(it,i){
     h+='<div class="ie-row"><input class="ie-item-input" value="'+escapeHtmlSimple(proc.items[i]||'')+'" onchange="ieRenameItem('+i+',this.value)"><button class="ie-mv" onclick="ieMoveItem('+i+',-1)">▲</button><button class="ie-mv" onclick="ieMoveItem('+i+',1)">▼</button><button class="ie-del" onclick="ieDeleteItem('+i+')">🗑</button></div>';
   });
